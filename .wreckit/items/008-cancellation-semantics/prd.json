@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "id": "008-cancellation-semantics",
+  "branch_name": "wreckit/008-cancellation-semantics",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Add case status tracking to wf_state",
+      "acceptance_criteria": [
+        "Add status field to #state{} record with values running/cancelled/done/failed",
+        "Add {set_case_status, Status} mutation type to mutation() union",
+        "Add validation clause for set_case_status in validate_single_mutation",
+        "Add application clause for set_case_status in apply_single_mutation",
+        "Initialize status field to running in wf_state:new/1",
+        "Export get_status/1 accessor function",
+        "Include status field in serialize_state and deserialize_state",
+        "Add unit tests for status field initialization and mutation",
+        "Add unit tests for invalid status rejection",
+        "Add unit tests for status persistence in ETS snapshots"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Foundational work - case status is required for case cancellation. All three cancellation types depend on this field being present in the state record."
+    },
+    {
+      "id": "US-002",
+      "title": "Create wf_cancel module structure with types and records",
+      "acceptance_criteria": [
+        "Create src/wf_cancel.erl module with module documentation",
+        "Define cancel_event() type union of #cancel_activity{}, #cancel_case{}, #cancel_region{}",
+        "Define #cancel_activity{} record with scope_id, cancelled_tokens, cancelled_effects, timestamp fields",
+        "Define #cancel_case{} record with scope_id, cancelled_tokens, cancelled_effects, timestamp fields",
+        "Define #cancel_region{} record with scope_id, cancelled_tokens, cancelled_effects, timestamp fields",
+        "Export cancel_event() and cancel_scope() types",
+        "Include wf_state.hrl and wf_exec.hrl for record definitions",
+        "Implement is_cancelled/2 to check if scope status is cancelled",
+        "Implement propagate/2 to mark tokens in scope as cancelled",
+        "Add stub functions for cancel_activity/3, cancel_case/1, cancel_region/3 returning {error, not_implemented}",
+        "Add stub functions for invariant verification returning ok",
+        "Create test/wf_cancel_tests.erl with basic test helpers and skeleton tests",
+        "Add tests for is_cancelled/2 with active/cancelled/undefined scopes"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Establishes the module skeleton. All subsequent stories build on this foundation. Type definitions ensure API consistency."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement region cancellation (cancel_region/3)",
+      "acceptance_criteria": [
+        "Implement cancel_region/3 to restore state from ETS using wf_state:restore_from_ets/1",
+        "Check scope exists using wf_state:get_scope/2, return {error, scope_not_found} if undefined",
+        "Check scope not already cancelled, return {error, already_cancelled} if status is cancelled",
+        "Get tokens in scope using #scope.tokens list (O(scope_size) efficiency)",
+        "Implement mark_tokens_cancelled/2 to buffer {update_token, TokenId, Fun} mutations",
+        "Implement cancel_effects_for_tokens/1 as stub returning [] (TODO for item 010)",
+        "Buffer and commit {cancel_scope, ScopeId} mutation to update scope status",
+        "Create #cancel_region{} event with scope_id, cancelled_tokens, cancelled_effects, timestamp",
+        "Implement get_tokens_by_ids/2 helper to look up tokens by ID list",
+        "Add unit tests for successful region cancellation",
+        "Add unit tests for error cases (scope_not_found, already_cancelled)",
+        "Add unit tests for O(scope_size) complexity (10000 total tokens, 10 in scope)",
+        "Add unit tests for scope isolation invariant (unrelated scopes unaffected)"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Core cancellation logic. Uses scope#tokens list for efficiency. All other cancellations build on this pattern."
+    },
+    {
+      "id": "US-004",
+      "title": "Implement invariant verification functions",
+      "acceptance_criteria": [
+        "Implement verify_scope_isolation/2 to check tokens outside cancelled scope remain active",
+        "Return {error, {tokens_corrupted, ActiveTokensOutsideScope}} if tokens corrupted",
+        "Implement verify_no_orphaned_tokens/2 to check all cancelled tokens in cancelled scope",
+        "Return {error, {orphaned_cancelled_tokens, OrphanedTokens}} if orphaned tokens found",
+        "Implement verify_scope_nesting/2 to check child scopes cancelled when parent cancelled",
+        "Return {error, {child_scopes_not_cancelled, ChildScopes}} if children not cancelled",
+        "Add unit tests for verify_scope_isolation/2 passing after valid cancellation",
+        "Add unit tests for verify_no_orphaned_tokens/2 passing after valid cancellation",
+        "Add unit tests for verify_scope_nesting/2 passing after parent cancellation",
+        "Add unit tests for invariants failing when state corrupted"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Invariant checks ensure state consistency. Called by tests to verify cancellation doesn't corrupt unrelated scopes."
+    },
+    {
+      "id": "US-005",
+      "title": "Implement activity cancellation (cancel_activity/3)",
+      "acceptance_criteria": [
+        "Implement cancel_activity/3 to restore state from ETS",
+        "Implement find_token_for_task/2 to scan tokens for matching value field (O(n), documented)",
+        "Return {error, task_not_found} if no token with matching task_id",
+        "Return {error, already_cancelled} if token status already cancelled",
+        "Implement get_effect_for_token/1 stub returning undefined (TODO for item 010)",
+        "Implement cancel_effect/1 stub returning ok (TODO for item 010)",
+        "If effect exists, call cancel_effect and return {error, effect_cancel_failed} on error",
+        "Buffer and commit {update_token, TokenId, Fun} mutation to mark token cancelled",
+        "Create #cancel_activity{} event with scope_id=task_id, cancelled_tokens, cancelled_effects",
+        "Add unit tests for activity cancellation without effect",
+        "Add unit tests for error cases (task_not_found, already_cancelled)",
+        "Add unit tests for activity cancellation preserving other tasks",
+        "Add unit tests for invariants passing after activity cancellation"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Activity cancellation requires token lookup by task_id. O(n) scan is acceptable for v1. Document for v2 optimization with task_id→token_id index."
+    },
+    {
+      "id": "US-006",
+      "title": "Implement case cancellation (cancel_case/1)",
+      "acceptance_criteria": [
+        "Implement cancel_case/1 to restore state from ETS",
+        "Check case status using wf_state:get_status/1, return {error, already_cancelled} if cancelled",
+        "Get all active tokens by filtering tokens map for status=active",
+        "Implement mark_all_tokens_cancelled/2 to buffer update_token mutations for all active tokens",
+        "Cancel all effects using cancel_effects_for_tokens/1 stub",
+        "Buffer and commit {set_case_status, cancelled} mutation to mark case terminal",
+        "Create #cancel_case{} event with scope_id=case_id, cancelled_tokens, cancelled_effects",
+        "Add unit tests for case cancellation cancelling all tokens",
+        "Add unit tests for case status updated to cancelled",
+        "Add unit tests for error case (already_cancelled)",
+        "Add unit tests for case cancellation with 100 tokens (performance)"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Case cancellation marks workflow as cancelled (terminal state). Executor must respect cancelled status and stop execution."
+    },
+    {
+      "id": "US-007",
+      "title": "Update wf_exec stub functions to delegate to wf_cancel",
+      "acceptance_criteria": [
+        "Update propagate_cancellation/2 in wf_exec to call wf_cancel:propagate/2",
+        "Update is_scope_cancelled/2 comment to document wf_cancel integration limitation",
+        "Document that wf_exec has inline state, not wf_state:state() (refactoring needed)",
+        "Add module documentation to wf_exec explaining cancellation integration",
+        "Update execute_cancel_scope/2 comment to document wf_cancel delegation",
+        "Add integration tests for propagate_cancellation/2 calling wf_cancel:propagate/2",
+        "Verify no regressions in existing wf_exec_tests (cancel_scope tests still pass)"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "wf_exec integration is limited by inline state. propagate_cancellation/2 delegates to wf_cancel, but is_scope_cancelled/2 remains stub. Future refactoring to add wf_state field will complete integration."
+    },
+    {
+      "id": "US-008",
+      "title": "Add comprehensive tests for nested scopes and edge cases",
+      "acceptance_criteria": [
+        "Add test for nested scope cancellation (parent cancels child tokens)",
+        "Add test for nested scope cancellation verifying both parent and child tokens cancelled",
+        "Add test for cancellation with empty scope (no tokens)",
+        "Add test for cancellation with single token",
+        "Add test for cancellation preserving token values",
+        "Add test for verify_scope_nesting/2 with nested scopes",
+        "Add test for verify_scope_isolation/2 with two independent scopes",
+        "Add performance benchmarks: small scope (10 tokens) < 1ms",
+        "Add performance benchmarks: large scope (1000 tokens) < 100ms",
+        "Add performance benchmarks: complexity isolation (10000 total, 10 in scope) < 1ms"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "Comprehensive testing ensures correctness and performance. Nested scope tests verify scope hierarchy handling."
+    },
+    {
+      "id": "US-009",
+      "title": "Add module documentation and final verification",
+      "acceptance_criteria": [
+        "Add comprehensive module documentation to wf_cancel.erl (edoc format)",
+        "Document three cancellation types (activity/case/region)",
+        "Document O(scope_size) performance characteristic",
+        "Document limitations (wf_effect stubbed, O(n) token scan, wf_exec partial integration)",
+        "Add inline comments to cancel_region/3 explaining O(scope_size) optimization",
+        "Add inline comments to cancel_activity/3 documenting O(n) token scan limitation",
+        "Update ARCHITECTURE.md with wf_cancel section",
+        "Run full test suite: rebar3 ct",
+        "Run dialyzer: rebar3 dialyzer (no warnings)",
+        "Run coverage: rebar3 cover (> 90%)"
+      ],
+      "priority": 4,
+      "status": "pending",
+      "notes": "Final phase. Ensure documentation is complete and all automated checks pass before considering implementation complete."
+    }
+  ]
+}

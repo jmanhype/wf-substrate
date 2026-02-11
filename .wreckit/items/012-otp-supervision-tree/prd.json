@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "id": "012-otp-supervision-tree",
+  "branch_name": "wreckit/012-otp-supervision-tree",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Implement wf_case_runner gen_statem with state machine",
+      "acceptance_criteria": [
+        "gen_statem module created with state_functions callback mode",
+        "All required states implemented: initializing, running, waiting_effect, waiting_signal, cancelled, done",
+        "State transitions properly handle: done/blocked checks, timeout events, cancel requests",
+        "Integration with wf_exec:run/3 for bytecode execution in quanta",
+        "Integration with wf_sched:new/2 for scheduler creation",
+        "Integration with wf_trace:new/1 for trace state initialization",
+        "Process registration via register/2 using wf_case_pid_name/1 helper",
+        "State timeout support for overall case timeout",
+        "compile() passes with no warnings",
+        "EUnit tests cover all state transitions"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Most complex component - test state machine thoroughly before integration"
+    },
+    {
+      "id": "US-002",
+      "title": "Implement wf_case_sup dynamic supervisor",
+      "acceptance_criteria": [
+        "supervisor module created with simple_one_for_one strategy",
+        "start_link/0 function implemented and exported",
+        "start_case/3 function: checks for existing case, creates child spec, starts wf_case_runner",
+        "Process registration handles name conflicts (returns {error, already_exists})",
+        "Child spec uses temporary restart (not restarted on normal termination)",
+        "Proper error handling for registration failures",
+        "Module compiles with no warnings",
+        "Unit tests verify dynamic child start/stop behavior"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Temporary restart prevents unwanted case restarts - execution state is not replayable"
+    },
+    {
+      "id": "US-003",
+      "title": "Update wf_substrate_sup to include wf_case_sup",
+      "acceptance_criteria": [
+        "wf_substrate_sup init/1 updated to include wf_case_sup in ChildSpecs",
+        "wf_case_sup configured as permanent child with restart => permanent",
+        "Child spec includes type => supervisor, modules => [wf_case_sup]",
+        "Application starts cleanly: application:start(wf_substrate) succeeds",
+        "Supervisor tree visible: supervisor:which_children(wf_substrate_sup) shows wf_case_sup",
+        "Application stops cleanly: application:stop(wf_substrate) succeeds"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Completes supervision tree structure"
+    },
+    {
+      "id": "US-004",
+      "title": "Implement wf_substrate public API - new_case, signal, cancel",
+      "acceptance_criteria": [
+        "new_case/3: accepts CaseId, Bytecode (wf_vm:wf_bc()), Ctx map",
+        "new_case/3 calls wf_case_sup:start_case/3, returns {ok, Pid} or {error, Reason}",
+        "signal/2: finds case PID via whereis/1, sends signal via wf_case_runner:signal/2",
+        "signal/2 returns ok or {error, not_found} if case doesn't exist",
+        "cancel/1: finds case PID, sends cancel via wf_case_runner:cancel/1",
+        "cancel/1 returns ok or {error, not_found}",
+        "wf_case_pid_name/1 helper generates registered names from CaseId",
+        "TODO comment added for item 004 wf_compile integration",
+        "Module compiles with -spec annotations for all exported functions",
+        "EUnit tests verify all API functions"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Accepts bytecode directly for now - wf_compile integration in item 004"
+    },
+    {
+      "id": "US-005",
+      "title": "Implement wf_substrate API - cancel_region, await, status",
+      "acceptance_criteria": [
+        "cancel_region/2: sends {cancel_region, ScopeId} to case runner",
+        "cancel_region/2 returns ok or {error, not_found}",
+        "await/2: monitors case process with monitor(process, Pid)",
+        "await/2 receives {case_completed, Result} or {'DOWN', ...} messages",
+        "await/2 returns {ok, Result} or {error, timeout} or {error, Reason}",
+        "await/2 cleans up monitor with demonitor on all exit paths",
+        "status/1: calls wf_case_runner:status/1, parses result",
+        "status/1 returns {ok, StatusInfo} map with state, ip, step_count, status fields",
+        "All functions have -spec type annotations",
+        "EUnit tests cover timeout, cancellation, status queries"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "await/2 deadlock risk - monitor ensures cleanup even if case crashes"
+    },
+    {
+      "id": "US-006",
+      "title": "Implement wf_substrate API - trace, validate",
+      "acceptance_criteria": [
+        "trace/3: sends {set_trace, Level, Sink} to case runner via wf_case_runner:set_trace/2",
+        "trace/3 returns ok or {error, not_found}",
+        "validate/2: stub function returning ok (full implementation in item 013)",
+        "validate/2 has TODO comment referencing item 013",
+        "Module exports updated to include trace/3, validate/2",
+        "-spec annotations for trace/3, validate/2",
+        "Basic EUnit test verifies validate/2 returns ok"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "validate/2 is intentionally stubbed - item 013 will implement full validation"
+    },
+    {
+      "id": "US-007",
+      "title": "Write comprehensive EUnit tests for all components",
+      "acceptance_criteria": [
+        "wf_case_runner_tests.erl: tests for all state transitions, signal delivery, cancel, status",
+        "wf_supervision_tree_tests.erl: tests for supervisor start/stop, dynamic children, restart behavior",
+        "wf_substrate_api_tests.erl: tests for all API functions with various inputs",
+        "Test setup/teardown properly starts/stops application",
+        "Mock bytecode generators reused from wf_exec_tests.erl",
+        "Tests pass: rebar3 eunit succeeds",
+        "Code coverage > 80%: rebar3 cover shows good coverage",
+        "No test race conditions or flaky tests"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Test patterns follow existing conventions from wf_state_tests.erl and wf_exec_tests.erl"
+    },
+    {
+      "id": "US-008",
+      "title": "Update application metadata and create usage examples",
+      "acceptance_criteria": [
+        "wf_substrate.app.src: registered includes wf_case_sup",
+        "wf_substrate.app.src: modules list includes all new modules",
+        "examples/basic_usage.erl demonstrates new_case/3, signal/2, await/2, trace/3",
+        "examples compile and run successfully",
+        "Documentation comments in all modules are clear and accurate",
+        "Supervision tree matches specification from PROMPT.md",
+        "No memory leaks in long-running tests"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "Optional wf_trace_sink not included - can be added in future item if needed"
+    }
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "id": "016-performance-benchmarks",
+  "branch_name": "wreckit/016-performance-benchmarks",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Create benchmark module scaffolding with result reporting",
+      "acceptance_criteria": [
+        "Module wf_bench.erl created in src/ directory",
+        "bench_result record defined with fields: name, steps, wall_time_us, steps_per_sec, memory_words",
+        "format_result_table/1 function prints table with correct column widths (30, 10, 12, 15, 12 chars)",
+        "run_benchmark/2 function executes bytecode and measures time/memory using erlang:monotonic_time/1 and erlang:process_info/2",
+        "run_all/0 function executes all 6 benchmarks and prints formatted table",
+        "Module compiles without errors or warnings"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Establish framework for all benchmarks. Include library eunit for test patterns (not for unit testing benchmarks)."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement sequence throughput benchmark (10,000 tasks)",
+      "acceptance_criteria": [
+        "generate_seq_n_tasks/1 function creates bytecode for N-task sequence",
+        "Bytecode pattern: SEQ_ENTER, (TASK_EXEC, SEQ_NEXT)×(N-1), TASK_EXEC, DONE",
+        "bench_seq_throughput/0 executes 10,000-task sequence benchmark",
+        "Expected step count: ~20,000 steps",
+        "Steps/sec > 100,000 (baseline threshold)",
+        "Result included in run_all/0 output table"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Adapt pattern from wf_test_seq.erl:179-185. Validates O(1) per-step cost for sequential execution."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement parallel fork+join benchmark (100 branches)",
+      "acceptance_criteria": [
+        "generate_par_n_branches/1 function creates bytecode for N-branch parallel",
+        "Bytecode pattern: PAR_FORK [1,3,5,...,2N-1], (TASK_EXEC, DONE)×N, JOIN_WAIT all",
+        "bench_par_fork_join/0 executes 100-branch parallel benchmark",
+        "Expected step count: ~202 steps (1 fork + 100×2 + 1 join)",
+        "Steps/sec should be high (demonstrates fork/join efficiency)",
+        "Result included in run_all/0 output table"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Adapt pattern from wf_test_par.erl:208-218. Measures fork overhead, join overhead, and total time."
+    },
+    {
+      "id": "US-004",
+      "title": "Implement repeated discriminator benchmark (1,000 iterations)",
+      "acceptance_criteria": [
+        "generate_discriminator_repeat/1 function creates bytecode for N iterations of discriminator",
+        "Bytecode pattern: (PAR_FORK [5 branches], (TASK_EXEC, DONE)×5, JOIN_WAIT first_complete)×N, DONE",
+        "bench_discriminator_repeat/0 executes 1,000-iteration discriminator benchmark",
+        "Expected step count: ~5,000 steps (5 steps/iteration × 1000)",
+        "Measures cancellation latency per iteration",
+        "Result included in run_all/0 output table"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Manually unroll loop (no LOOP_CHECK counter setup for benchmarks). Adapt pattern from wf_test_par.erl:66-76."
+    },
+    {
+      "id": "US-005",
+      "title": "Implement deep nesting benchmark (100 levels)",
+      "acceptance_criteria": [
+        "generate_deep_nesting/1 function creates bytecode for N levels of nested seq(par(...))",
+        "Bytecode pattern: seq(par(seq(task,task), seq(task,task))) repeated N times",
+        "bench_deep_nesting/0 executes 100-level nesting benchmark",
+        "Expected step count: ~1,400 steps (14 steps/level × 100)",
+        "Steps/sec within same order of magnitude as benchmark #1 (validates flat bytecode advantage)",
+        "Result included in run_all/0 output table"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Key invariant: Per-step cost does NOT scale with AST depth. Flat bytecode execution vs recursive AST dispatch."
+    },
+    {
+      "id": "US-006",
+      "title": "Implement deferred benchmarks with skip results",
+      "acceptance_criteria": [
+        "bench_mi_instances/0 returns bench_result with steps=0, all fields zero",
+        "Function includes TODO comment pointing to item 009 (MI_SPAWN not implemented)",
+        "bench_state_store/0 returns bench_result with steps=0, all fields zero",
+        "Function includes TODO comment pointing to items 006 and 010 (wf_state not implemented)",
+        "Both functions show 'SKIPPED' in Steps column when table is printed",
+        "TODO comments explain what opcodes/modules are missing"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "MI_SPAWN opcode not in wf_exec.erl dispatch (lines 186-208). wf_state.erl module does not exist. Explicitly document dependencies."
+    },
+    {
+      "id": "US-007",
+      "title": "Add comprehensive documentation and validation comments",
+      "acceptance_criteria": [
+        "Module doc explains benchmark purpose, output format, and key invariant",
+        "Function specs added for all exported functions",
+        "Inline comments explain what each benchmark validates",
+        "Validation comments in benchmarks #1 and #4 explain O(1) invariant",
+        "Example output table included in module doc",
+        "TODO comments in deferred benchmarks point to specific items (006, 009, 010)"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Documentation should enable users to interpret results and understand what's being validated. Include interpretation guidance."
+    },
+    {
+      "id": "US-008",
+      "title": "Verify O(1) per-step cost invariant across benchmarks",
+      "acceptance_criteria": [
+        "Execute run_all/0 and collect all 4 active benchmark results",
+        "Verify steps/sec for benchmark #1 (seq) > 100,000",
+        "Verify steps/sec for benchmark #4 (nesting) is within same order of magnitude as #1",
+        "Check that all benchmarks complete without errors",
+        "Verify table output is properly formatted and readable",
+        "Confirm step counts match expected values (within ±10%)"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Final validation that benchmarks demonstrate the key invariant: flat bytecode execution has O(1) per-step cost regardless of AST complexity."
+    }
+  ]
+}

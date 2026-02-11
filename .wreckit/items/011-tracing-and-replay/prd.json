@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "id": "011-tracing-and-replay",
+  "branch_name": "wreckit/011-tracing-and-replay",
+  "user_stories": [
+    {
+      "id": "US-011-001",
+      "title": "Create wf_trace module with types, records, and basic structure",
+      "acceptance_criteria": [
+        "wf_trace.erl module created with all type definitions",
+        "trace_event record defined with step_seq, opcode, state_before, state_after, timestamp, scope, branch_id, metadata fields",
+        "replay_entry record defined with step_seq, opcode, scheduler_choice, effect_result fields",
+        "trace_state record defined with level, sink, case_id fields",
+        "trace_level type defined as none | min | full",
+        "trace_sink type defined as {callback, fun()} | {ets, ets:tid()} | {process, pid()}",
+        "All types exported via -export_type",
+        "Module compiles without errors: rebar3 compile",
+        "Type checking passes: rebar3 dialyzer"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is the foundation for the entire tracing system. All types and records must match the specification in item.json:6."
+    },
+    {
+      "id": "US-011-002",
+      "title": "Add case_id field to exec_state record",
+      "acceptance_criteria": [
+        "case_id field added to #exec_state{} record in wf_exec.hrl",
+        "case_id type is term() (typically make_ref())",
+        "wf_exec:new/1 generates unique case_id using make_ref()",
+        "Module compiles without errors",
+        "Type checking passes",
+        "Existing tests still pass"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "case_id is used for trace correlation when multiple workflows execute concurrently. Each executor instance needs a unique identifier."
+    },
+    {
+      "id": "US-011-003",
+      "title": "Implement trace state management functions",
+      "acceptance_criteria": [
+        "wf_trace:new/1 creates trace state with specified level",
+        "wf_trace:new/1 creates default ETS table sink (wf_trace_events, bag type)",
+        "wf_trace:set_level/1 sets trace level in process dictionary",
+        "wf_trace:get_level/0 gets current trace level from process dictionary",
+        "wf_trace:set_sink/2 sets trace sink (callback, ETS, or process)",
+        "wf_trace:get_events/1 retrieves all events from sink",
+        "ETS sink returns events via ets:tab2list",
+        "Process and callback sinks return empty list",
+        "Unit tests pass for all state management functions",
+        "Type checking passes"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Using process dictionary for trace state storage (simple, no gen_server overhead). ETS table is default sink for v1."
+    },
+    {
+      "id": "US-011-004",
+      "title": "Implement trace event emission with level filtering",
+      "acceptance_criteria": [
+        "wf_trace:emit/2 emits trace events based on trace level",
+        "Trace level none: emit/2 is no-op (zero overhead)",
+        "Trace level min: emit only structural events (PAR_FORK, JOIN_WAIT, CANCEL_SCOPE, DONE)",
+        "Trace level full: emit all events",
+        "wf_trace:emit_event/2 builds full trace event with all required fields",
+        "wf_trace:extract_branch_id/2 extracts branch_id from exec_state",
+        "wf_trace:emit_to_sink/2 sends events to callback/ETS/process sinks",
+        "Sink errors don't crash executor (error handling)",
+        "Unit tests pass for all trace levels",
+        "Unit tests pass for all sink types",
+        "Unit tests verify zero overhead at level=none",
+        "Type checking passes"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is the core emission logic that integrates with the executor. Structural opcodes are PAR_FORK, JOIN_WAIT, CANCEL_SCOPE, DONE (emitted at level=min)."
+    },
+    {
+      "id": "US-011-005",
+      "title": "Implement exec_state snapshot and restore functions",
+      "acceptance_criteria": [
+        "wf_exec:snapshot_exec_state/1 serializes exec_state to binary via term_to_binary/1",
+        "wf_exec:restore_exec_state/2 deserializes binary to exec_state via binary_to_term/1",
+        "restore_exec_state/2 validates bytecode matches (optional check)",
+        "restore_exec_state/2 returns {error, invalid_snapshot} on deserialization failure",
+        "Functions exported from wf_exec module",
+        "Unit tests pass for snapshot serialization",
+        "Unit tests pass for restore deserialization",
+        "Unit tests pass for bytecode validation",
+        "Unit tests pass for error handling (invalid binary)",
+        "Type checking passes"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "State snapshots are captured in trace events at level=full. Using full snapshots for v1 (diffs for v2). All exec_state fields are serializable (make_ref() is serializable)."
+    },
+    {
+      "id": "US-011-006",
+      "title": "Implement event filtering functions",
+      "acceptance_criteria": [
+        "wf_trace:filter/2 filters events by opcode, scope, branch, or predicate",
+        "Filter by opcode: {opcode, Opcode} returns events matching opcode",
+        "Filter by scope: {scope, ScopeId} returns events where ScopeId is in scope_stack",
+        "Filter by branch: {branch, BranchId} returns events matching branch_id",
+        "Filter by predicate: {predicate, Fun} applies custom predicate function",
+        "wf_trace:has_scheduler_choice/1 predicate checks for scheduler_choice in metadata",
+        "wf_trace:has_effect_result/1 predicate checks for effect_result in metadata",
+        "wf_trace:is_in_branch/1 predicate generator for branch filtering",
+        "Unit tests pass for all filter types",
+        "Unit tests pass for helper predicates",
+        "Unit tests pass for combined filters",
+        "Type checking passes"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Simple list comprehensions for v1 filtering. ETS match specs for v2 if performance issues arise."
+    },
+    {
+      "id": "US-011-007",
+      "title": "Implement replay log generation and validation",
+      "acceptance_criteria": [
+        "wf_trace:to_replay_log/1 extracts replay log from trace events",
+        "Replay log contains entries with scheduler_choice or effect_result in metadata",
+        "Replay log is subset of full trace (only nondeterministic inputs)",
+        "wf_trace:from_replay_log/1 creates trace state from replay log",
+        "from_replay_log/1 validates replay log format",
+        "from_replay_log/1 returns {error, invalid_replay_log} on validation failure",
+        "wf_trace:validate_replay_log/1 validates replay entry format",
+        "Replay sink support in emit_to_sink/2 (no-op for replay sink)",
+        "Unit tests pass for replay log generation",
+        "Unit tests pass for replay log validation",
+        "Unit tests verify replay log is smaller than full trace",
+        "Type checking passes"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Replay log captures only nondeterministic inputs (scheduler choices and effect results), not derived state. Effect result stubbed as undefined for v1 (item 010 not implemented)."
+    },
+    {
+      "id": "US-011-008",
+      "title": "Integrate wf_trace with wf_exec",
+      "acceptance_criteria": [
+        "wf_exec:step/2 calls wf_trace:emit/2 after each reduction step",
+        "wf_exec:step/2 captures state_before and state_after snapshots",
+        "wf_exec:extract_metadata/3 extracts per-opcode metadata",
+        "extract_metadata/3 returns num_branches and target_ips for PAR_FORK",
+        "extract_metadata/3 returns join_policy for JOIN_WAIT",
+        "extract_metadata/3 returns cancel_op and scope_id for CANCEL_SCOPE",
+        "extract_metadata/3 returns empty map for other opcodes (v1)",
+        "wf_exec:step/2 returns simplified trace event for backward compatibility",
+        "Integration tests pass for all trace levels (none, min, full)",
+        "Integration tests verify trace events contain all required fields",
+        "Integration tests verify step_seq is monotonic",
+        "Integration tests verify timestamp is monotonic",
+        "Integration tests verify scope_stack is captured",
+        "Integration tests verify branch_id is captured (when in branch)",
+        "Integration tests verify state_before and state_after are captured (level=full)",
+        "Type checking passes"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Trace emission happens after opcode execution. State snapshots captured before and after execution. Metadata extraction is stubbed for v1 (per-opcode metadata in v2)."
+    },
+    {
+      "id": "US-011-009",
+      "title": "Extend wf_sched API with choose_with_entry/2",
+      "acceptance_criteria": [
+        "wf_sched behavior extended with choose_with_entry/2 callback",
+        "wf_sched:choose_with_entry/2 dispatches to policy modules",
+        "wf_sched_nondeterministic:choose_with_entry/2 returns choice entry",
+        "wf_sched_deterministic:choose_with_entry/2 returns choice entry",
+        "wf_sched_replay:choose_with_entry/2 returns choice entry from log",
+        "Choice entry format: {StepSeq, EnabledSet, Chosen}",
+        "wf_sched:choose_with_entry/2 handles single-choice case (no policy invocation)",
+        "Unit tests pass for all scheduler policies",
+        "Unit tests verify choice entry format matches wf_sched:choice_entry()",
+        "Type checking passes"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Extending scheduler API to return choice entry along with chosen action. This is cleaner than inspecting scheduler state after execution."
+    },
+    {
+      "id": "US-011-010",
+      "title": "Write comprehensive tests for wf_trace",
+      "acceptance_criteria": [
+        "Unit tests pass for trace level none (no events)",
+        "Unit tests pass for trace level min (structural events only)",
+        "Unit tests pass for trace level full (all events)",
+        "Unit tests pass for all sink types (callback, ETS, process)",
+        "Unit tests pass for all filter types (opcode, scope, branch, predicate)",
+        "Unit tests pass for replay log generation and validation",
+        "Unit tests pass for state snapshot and restore",
+        "Property-based tests pass: replay log is smaller than full trace",
+        "Property-based tests pass: trace events ordered by step_seq",
+        "Integration tests pass: wf_exec emits trace events",
+        "Integration tests pass: trace event field completeness",
+        "Integration tests pass: scheduler choice captured for replay log",
+        "Integration tests pass: replay execution produces identical trace",
+        "Code coverage > 90% for wf_trace.erl",
+        "rebar3 eunit passes all tests",
+        "rebar3 proper passes all property-based tests (if proper is available)",
+        "rebar3 dialyzer passes with no type errors",
+        "Manual testing steps completed (zero overhead, structural filtering, state correctness, replay validation)"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Comprehensive testing validates all tracing functionality. Unit tests for each function. Integration tests for executor and scheduler. Property-based tests for invariants. Manual testing for performance and edge cases."
+    }
+  ]
+}

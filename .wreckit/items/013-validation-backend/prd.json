@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "id": "013-validation-backend",
+  "branch_name": "wreckit/013-validation-backend",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Define validation_state, issue, and report records",
+      "acceptance_criteria": [
+        "validation_state record includes bytecode, tokens, branch_map, join_counters, scope_stack, step_count fields",
+        "issue record includes type, state, message, path_from_initial fields",
+        "report record includes explored_state_count, unique_state_count, max_depth_reached, checks_passed, issues_found fields",
+        "Records follow same pattern as wf_exec.hrl (maps for collections)",
+        "Module compiles without dialyzer warnings"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Create wf_validate.erl with -include(\"wf_exec.hrl\") and -export_type directives"
+    },
+    {
+      "id": "US-002",
+      "title": "Implement new/1 and default_options/0 constructor functions",
+      "acceptance_criteria": [
+        "new/1 creates validation_state with single active token at IP=0",
+        "default_options/0 returns map with depth=>100, token_bound=>10, search_strategy=>bfs, trace_level=>none",
+        "Initial token has root scope_id and undefined instance_id",
+        "Functions have -spec declarations"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Mirrors wf_exec:new/1 pattern from wf_exec.erl:48-72"
+    },
+    {
+      "id": "US-003",
+      "title": "Implement to_petri_net/1 bytecode compiler",
+      "acceptance_criteria": [
+        "to_petri_net/1 returns {validation_state(), Metadata} tuple",
+        "Metadata includes bytecode_length and transition_counts (opcodes by type)",
+        "Initial state has single token at IP=0",
+        "Function has -spec declaration"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Compiles wf_vm:wf_bc() to LTS representation (places=bytecode positions, transitions=opcodes)"
+    },
+    {
+      "id": "US-004",
+      "title": "Implement enabled_transitions/1 to compute enabled actions",
+      "acceptance_criteria": [
+        "Returns list of {token, token_id} for active tokens",
+        "Handles all opcodes: TASK_EXEC, DONE, SEQ_ENTER, SEQ_NEXT, PAR_FORK, JOIN_WAIT, XOR_CHOOSE, LOOP_CHECK, LOOP_BACK, MI_SPAWN, CANCEL_SCOPE",
+        "Returns empty list when no active tokens or all tokens complete",
+        "Function has -spec declaration"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Must enumerate ALL enabled actions for exhaustive checking (per research.md:87-88)"
+    },
+    {
+      "id": "US-005",
+      "title": "Implement fire_transition/2 to apply opcode semantics",
+      "acceptance_criteria": [
+        "Handles TASK_EXEC as no-op (advances IP, no effect execution)",
+        "Handles PAR_FORK by spawning N tokens, creating branch_map and join_counters",
+        "Handles DONE by marking token as complete",
+        "Handles SEQ_ENTER, SEQ_NEXT, LOOP_CHECK, LOOP_BACK, MI_SPAWN, CANCEL_SCOPE",
+        "Returns updated validation_state",
+        "Function has -spec declaration"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Symbolic execution: never execute actual tasks or effects (per PROMPT.md:218-227)"
+    },
+    {
+      "id": "US-006",
+      "title": "Implement state_hash/1 for visited set tracking",
+      "acceptance_criteria": [
+        "Hashes bytecode, tokens, branch_map, join_counters fields",
+        "Returns consistent hash for identical states",
+        "Uses erlang:phash2/1 for performance",
+        "Function has -spec declaration"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "State hashing for memory efficiency (per research.md:132, 185)"
+    },
+    {
+      "id": "US-007",
+      "title": "Implement explore/2 BFS/DFS traversal with bounds",
+      "acceptance_criteria": [
+        "Performs BFS when search_strategy=>bfs, DFS when search_strategy=>dfs",
+        "Stops exploration when step_count exceeds depth bound",
+        "Stops exploration when map_size(tokens) exceeds token_bound",
+        "Tracks visited states via state_hash/1 to avoid cycles",
+        "Returns {ok, report()} with explored_state_count, unique_state_count, max_depth_reached",
+        "Function has -spec declaration"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Core exploration engine (per research.md:108-114)"
+    },
+    {
+      "id": "US-008",
+      "title": "Implement check_dead_transitions/2 for unreachable code detection",
+      "acceptance_criteria": [
+        "Collects all reachable IPs from explored states",
+        "Compares to all IPs in bytecode (0 to length-1)",
+        "Returns list of issue() records for unreachable IPs",
+        "Issue type is dead_transition",
+        "Function has -spec declaration"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Dead transition = unreachable code (per research.md:15)"
+    },
+    {
+      "id": "US-009",
+      "title": "Implement check_proper_completion/1 for terminal state validation",
+      "acceptance_criteria": [
+        "Filters explored states to find terminal states (no active tokens)",
+        "Checks each terminal state has exactly 1 complete token",
+        "Returns issue() list for violations (0 or >1 complete tokens)",
+        "Issue type is improper_completion",
+        "Function has -spec declaration"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Proper completion = exactly 1 token at termination (per research.md:17)"
+    },
+    {
+      "id": "US-010",
+      "title": "Implement check_deadlock/1 for stuck state detection",
+      "acceptance_criteria": [
+        "Finds states with active tokens but no enabled transitions",
+        "Returns issue() list for deadlock states",
+        "Issue type is deadlock",
+        "Function has -spec declaration"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Deadlock = tokens exist but no enabled actions (per research.md:18)"
+    },
+    {
+      "id": "US-011",
+      "title": "Implement check_option_to_complete/2 for livelock detection",
+      "acceptance_criteria": [
+        "For each explored state, runs bounded BFS to find terminal state",
+        "Returns issue() list for states with no path to terminal",
+        "Issue type is livelock",
+        "Uses depth bound from options to prevent infinite search",
+        "Function has -spec declaration"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Option to complete = no livelocks (per research.md:16). Expensive check, consider optional."
+    },
+    {
+      "id": "US-012",
+      "title": "Implement check_soundness/1 composite check",
+      "acceptance_criteria": [
+        "Composes check_dead_transitions, check_option_to_complete, check_proper_completion",
+        "Returns combined issue() list from all three checks",
+        "Returns empty list if all checks pass",
+        "Function has -spec declaration"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Soundness = proper completion + option to complete + no dead transitions (per research.md:19)"
+    },
+    {
+      "id": "US-013",
+      "title": "Implement validate/1 and validate/2 public API",
+      "acceptance_criteria": [
+        "validate/1 accepts bytecode, uses default_options()",
+        "validate/2 accepts bytecode and custom options map",
+        "Returns {ok, report()} if all checks pass",
+        "Returns {error, [issue()]} if any issues found",
+        "Report includes checks_passed map and issues_found list",
+        "Functions have -spec declarations"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Main entry points (per research.md:21)"
+    },
+    {
+      "id": "US-014",
+      "title": "Create wf_validate_tests.erl EUnit test suite",
+      "acceptance_criteria": [
+        "Test new/1 creates initial state with single token",
+        "Test enabled_transitions/1 returns correct actions for simple bytecode",
+        "Test fire_transition/2 advances IP for TASK_EXEC, spawns tokens for PAR_FORK",
+        "Test check_dead_transitions/2 detects unreachable code after DONE",
+        "Test check_deadlock/1 detects PAR_FORK without JOIN_WAIT",
+        "Test check_proper_completion/1 detects multiple complete tokens",
+        "Test validate/1 returns {ok, report()} for simple sequence",
+        "Test validate/1 returns {error, Issues} for deadlock bytecode",
+        "All tests pass: rebar3 eunit"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Follow test patterns from wf_exec_tests.erl (per research.md:61, 101)"
+    },
+    {
+      "id": "US-015",
+      "title": "Integrate with wf_substrate.erl public API",
+      "acceptance_criteria": [
+        "wf_substrate:validate/2 exported in module header",
+        "wf_substrate:validate/2 calls wf_validate:validate/2",
+        "Converts proplists to maps for wf_validate",
+        "Returns {ok, wf_validate:report()} or {error, [wf_validate:issue()]}",
+        "Function has -spec declaration"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Public API integration (per research.md:64, wf_substrate.erl:16)"
+    }
+  ]
+}

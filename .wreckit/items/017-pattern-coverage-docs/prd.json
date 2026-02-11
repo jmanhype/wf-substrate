@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "id": "017-pattern-coverage-docs",
+  "branch_name": "wreckit/017-pattern-coverage-docs",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Create PATTERNS.md with workflow pattern mapping table",
+      "acceptance_criteria": [
+        "File docs/PATTERNS.md exists",
+        "Contains table mapping implemented patterns to van der Aalst catalog",
+        "Distinguishes kernel primitives (11 opcodes) from derived patterns",
+        "Lists all test modules (wf_test_seq, wf_test_par, wf_test_xor, wf_test_join, wf_test_cancel, wf_test_mi, wf_test_term, wf_test_determinism)",
+        "Documents 16 implemented patterns with wf_term() expressions, bytecode opcodes, and limitations",
+        "References specific file:line numbers for all implementation claims",
+        "Table columns include: Pattern #, Name, Category, wf_term(), Opcodes, Test modules, Kernel/Derived/Not Implemented, Limitations"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Base test modules as evidence of implementation. Map patterns from PROMPT.md:75-91 to actual test coverage. Document known gaps: cancellation stubbed (item 008), MI not implemented (item 009), scheduler missing."
+    },
+    {
+      "id": "US-002",
+      "title": "Expand TESTING.md with determinism and replay testing methodology",
+      "acceptance_criteria": [
+        "Preserves all existing content from docs/TESTING.md:1-266",
+        "Adds 'Determinism and Replay Testing' section after line 266",
+        "Documents wf_test_determinism.erl tests (7 test functions)",
+        "Explains trace comparison methodology from wf_test_trace_helpers.erl:18-49",
+        "Documents replay log format from wf_trace.hrl:18-23",
+        "Notes current limitations: wf_sched module doesn't exist, effect_result pending item 010",
+        "Provides code examples for running determinism tests",
+        "Explains diff format: {error, [{Field, Index}...]} or {error, {length_mismatch, N, M}}"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "wf_test_determinism.erl has comprehensive tests for deterministic execution. wf_test_trace_helpers.erl provides compare_traces/2 and run_with_trace/3 functions. Replay infrastructure defined but not functional."
+    },
+    {
+      "id": "US-003",
+      "title": "Add Common Test and operational testing sections to TESTING.md",
+      "acceptance_criteria": [
+        "Adds 'Common Test Integration' section with suite structure examples",
+        "Documents rebar3 ct commands for running test suites",
+        "Adds 'Operational Testing' section covering supervision restart testing",
+        "Documents failure scenario testing (case runner crash, effect timeout, state corruption)",
+        "Notes current limitation: cannot test supervision until item 012 complete (wf_substrate_sup.erl:46 has empty child specs)",
+        "Provides code examples for test suite structure and chaos testing",
+        "References wf_validate:check_soundness/1 for state corruption detection"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Common Test suite structure follows standard Erlang/OTP patterns. Operational testing limited by missing supervision tree (item 012) and effect system (item 010)."
+    },
+    {
+      "id": "US-004",
+      "title": "Add coverage interpretation and manual testing sections to TESTING.md",
+      "acceptance_criteria": [
+        "Adds 'Coverage Report Interpretation' section",
+        "Documents coverage goals: >80% line coverage, >70% branch coverage",
+        "Explains expected gaps in wf_exec.erl:512-529 (cancellation stubs)",
+        "Provides examples for improving coverage (edge cases, property testing, error paths)",
+        "Adds 'Manual Testing Procedures' section with interactive Erlang shell examples",
+        "Documents debugging failed tests workflow (extract bytecode, create reproduction case, enable tracing)",
+        "Includes load testing example spawning 1000 concurrent workflows"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Coverage gaps align with known implementation items 008, 009, 010, 012. Manual testing examples should use actual bytecode from test modules."
+    },
+    {
+      "id": "US-005",
+      "title": "Create OPERATIONS.md with supervision tree documentation",
+      "acceptance_criteria": [
+        "File docs/OPERATIONS.md exists",
+        "Documents current state: wf_substrate_sup.erl:46 has empty child specs",
+        "Documents planned architecture from PROMPT.md:182-185",
+        "Explains restart strategies: one_for_one (top-level), simple_one_for_one (case supervisor - planned), one_for_one (effect supervisor - planned)",
+        "Documents case runner crash handling: current (no restart) vs planned (automatic restart with checkpoint)",
+        "References dependency on item 012 (otp-supervision-tree)",
+        "Documents state loss on restart: no persistence yet"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Supervision tree is skeleton-only. Must distinguish current state from planned architecture. Reference wf_substrate_sup.erl:42-47 for actual code state."
+    },
+    {
+      "id": "US-006",
+      "title": "Document failure modes and recovery in OPERATIONS.md",
+      "acceptance_criteria": [
+        "Adds 'Failure Modes and Recovery' section to OPERATIONS.md",
+        "Documents case runner crash: current (manual) vs planned (automatic restart)",
+        "Documents effect timeout: not implemented (item 010), planned behavior with timeout and error receipts",
+        "Documents state corruption detection: wf_validate.erl:532-652 (5 correctness checks)",
+        "Documents cancellation failure: stubbed in wf_exec.erl:512-529, awaiting item 008",
+        "Provides recovery steps for each failure mode",
+        "Notes which failures have automatic recovery vs require manual intervention"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Many failure modes cannot be handled until dependent items complete. Be honest about what's possible now vs planned."
+    },
+    {
+      "id": "US-007",
+      "title": "Document telemetry and tracing configuration in OPERATIONS.md",
+      "acceptance_criteria": [
+        "Adds 'Telemetry and Tracing' section to OPERATIONS.md",
+        "Documents 3 trace levels: none (0% overhead), min (5-10% overhead, structural events only), full (50-100% overhead, all events)",
+        "Documents 4 trace sink types: callback, ets, process, replay (from wf_trace.erl:40-44)",
+        "Provides code examples for configuring tracing (set_level, set_sink)",
+        "Documents trace_event record format from wf_trace.hrl:4-8",
+        "Explains filtering events with wf_trace:filter/2",
+        "Notes current limitation: replay sink not functional (scheduler required)"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Tracing infrastructure is well-implemented. Use wf_trace.erl:38-44 for types, wf_trace.erl:232-261 for level semantics."
+    },
+    {
+      "id": "US-008",
+      "title": "Document monitoring and health checks in OPERATIONS.md",
+      "acceptance_criteria": [
+        "Adds 'Monitoring Running Systems' section to OPERATIONS.md",
+        "Documents planned API: wf_substrate:list_cases/0, wf_substrate:case_status/1",
+        "Documents methods for detecting stuck workflows: is_blocked/1, token status inspection, validation checks",
+        "Provides code examples for retrieving trace logs from ETS table and process sinks",
+        "Documents health check functions: check_executor_health/1, check_supervisor_health/0, check_system_health/0",
+        "Notes current limitation: case runners not implemented, no API available",
+        "Explains conversion to replay log for offline analysis"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Most monitoring APIs are planned, not implemented. Provide planned API signature and note it's awaiting case supervisor (item 012)."
+    },
+    {
+      "id": "US-009",
+      "title": "Document configuration options and deployment in OPERATIONS.md",
+      "acceptance_criteria": [
+        "Adds 'Configuration Options' section to OPERATIONS.md",
+        "Documents executor config: step_quanta (from wf_exec:run/3)",
+        "Documents trace config: trace_level, trace_sink with code examples",
+        "Documents scheduler policy: deterministic/nondeterministic/replay (planned, not implemented)",
+        "Documents effect handler config (planned, item 010)",
+        "Documents effect budgets (planned)",
+        "Adds 'Deployment' section with build, systemd service, environment variables",
+        "Documents code reload and release upgrade procedures"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Distinguish between implemented (step_quanta, trace config) and planned (scheduler policy, effect handler). Provide config examples for both states."
+    },
+    {
+      "id": "US-010",
+      "title": "Add troubleshooting guide to OPERATIONS.md",
+      "acceptance_criteria": [
+        "Adds 'Troubleshooting' section to OPERATIONS.md",
+        "Documents common issues: workflow stuck, high memory, slow execution, startup crash",
+        "Provides debugging checklist with code examples for each issue",
+        "Documents steps to check executor status, inspect tokens, validate bytecode, enable tracing, check process info",
+        "Links to pattern coverage (PATTERNS.md), testing (TESTING.md), and source code",
+        "Provides fix recommendations for each common issue"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Troubleshooting should be actionable. Use actual commands and code examples. Link to existing documentation where relevant."
+    }
+  ]
+}

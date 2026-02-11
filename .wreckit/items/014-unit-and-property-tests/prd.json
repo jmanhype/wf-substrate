@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "id": "014-unit-and-property-tests",
+  "branch_name": "wreckit/014-unit-and-property-tests",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Create wf_test_mi.erl for multiple instance patterns",
+      "acceptance_criteria": [
+        "Module test/wf_test_mi.erl created and compiles without warnings",
+        "Fixed count MI tests: spawn N instances, verify all execute",
+        "Dynamic count MI tests: eval_instance_count with min/max bounds",
+        "Join policy tests: wait_all, wait_n, first_complete, none",
+        "Cancellation tests: cancel_remaining/2 cancels correct instances",
+        "Instance ID assignment tests: unique IDs, sequential numbering",
+        "All tests pass: rebar3 eunit --module wf_test_mi",
+        "Code coverage >90% for wf_mi.erl"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "wf_mi.erl is fully implemented, lowest-risk starting point. Follow pattern from wf_mi_tests.erl."
+    },
+    {
+      "id": "US-002",
+      "title": "Create wf_test_seq.erl for sequential composition tests",
+      "acceptance_criteria": [
+        "Module test/wf_test_seq.erl created and compiles without warnings",
+        "Single sequence test: Task A → Task B → Task C executes in order",
+        "Nested sequence test: Seq(Seq(A, B), C) executes correctly",
+        "Sequence with effects test: TASK_EXEC → EFFECT → SEQ_NEXT",
+        "Sequence with cancellation test: Cancel mid-sequence terminates execution",
+        "SEQ_NEXT jump target test: Advances IP to correct instruction",
+        "Empty sequence test: SEQ_ENTER → DONE completes",
+        "All tests pass: rebar3 eunit --module wf_test_seq"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Sequential execution is simplest pattern, building block for complex workflows."
+    },
+    {
+      "id": "US-003",
+      "title": "Create wf_test_par.erl for parallel split and synchronization tests",
+      "acceptance_criteria": [
+        "Module test/wf_test_par.erl created and compiles without warnings",
+        "2-branch parallel test: PAR_FORK [1,3] → both execute → JOIN_WAIT all",
+        "3-branch parallel test: PAR_FORK [1,3,5] → all execute → JOIN_WAIT all",
+        "N-branch parameterized test: Test N=2,3,5,10 branches",
+        "Mixed completion test: Par with different task execution times",
+        "Join counter test: Counter created and increments correctly",
+        "wait_n join test: N of M complete, rest cancelled",
+        "first_complete join test: First done cancels others",
+        "All tests pass: rebar3 eunit --module wf_test_par"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Parallel execution builds on sequential patterns. Verify join counter mechanics thoroughly."
+    },
+    {
+      "id": "US-004",
+      "title": "Create wf_test_xor.erl for exclusive choice tests",
+      "acceptance_criteria": [
+        "Module test/wf_test_xor.erl created and compiles without warnings",
+        "2-branch XOR test: XOR_CHOOSE [1,3] → one branch executes",
+        "3-branch XOR test: XOR_CHOOSE [1,3,5] → one executes",
+        "N-branch parameterized test: Test N=2,3,5 branches",
+        "Signal selection test: Use deterministic scheduler, verify same branch selected",
+        "Unselected branches test: Verify they don't execute",
+        "Simple merge test: Multiple branches converge to single DONE",
+        "Deterministic scheduler test: Same branch selected across multiple runs",
+        "All tests pass: rebar3 eunit --module wf_test_xor"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Similar to parallel but only one branch executes. Test with deterministic scheduler."
+    },
+    {
+      "id": "US-005",
+      "title": "Create wf_test_join.erl for all join policies",
+      "acceptance_criteria": [
+        "Module test/wf_test_join.erl created and compiles without warnings",
+        "wait_all policy test: All M branches must complete",
+        "wait_n policy test: N of M complete, rest cancelled",
+        "first_complete policy test: First done cancels others",
+        "sync_merge policy test: Synchronizing merge behavior",
+        "Join counter increments test: Counter increments on branch completion",
+        "Join threshold test: Counter values match expected thresholds",
+        "Edge case tests: N=0, N=M, N>M (error) handled correctly",
+        "Test M values: 2, 3, 5, 10 branches",
+        "All tests pass: rebar3 eunit --module wf_test_join"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Covers all join policy variants. Verify counter mechanics comprehensively."
+    },
+    {
+      "id": "US-006",
+      "title": "Create wf_test_cancel.erl for cancellation patterns",
+      "acceptance_criteria": [
+        "Module test/wf_test_cancel.erl created and compiles without warnings",
+        "Cancel running task test: CANCEL_SCOPE wraps task, exit mid-execution",
+        "Cancel case test: All tokens cancelled, status = cancelled",
+        "Cancel region test: CANCEL_SCOPE enter/exit, unrelated scopes preserved",
+        "Cancel with pending effects test: Effects handled correctly",
+        "Nested cancel scopes test: Scope stack management correct",
+        "Cancel during PAR test: Cancellation in parallel workflow",
+        "Cancel during XOR test: Cancellation in exclusive choice",
+        "Cancel during MI test: Cancellation in multiple instance",
+        "Edge case test: Empty cancel scope handled",
+        "All tests pass: rebar3 eunit --module wf_test_cancel"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Cancellation uses CANCEL_SCOPE opcodes, no separate wf_cancel module exists yet."
+    },
+    {
+      "id": "US-007",
+      "title": "Create wf_prop.erl for property-based testing framework",
+      "acceptance_criteria": [
+        "Module test/wf_prop.erl created and compiles without warnings",
+        "random_term/1 function: Generate bytecode with depth limit",
+        "random_term(0) produces simple DONE-only bytecode",
+        "random_term(5) produces complex nested patterns (par, xor, seq)",
+        "for_all/3 function: Run property test N iterations",
+        "for_all runs property function on each generated term",
+        "well_formed/1 function: Validates opcode format",
+        "valid_labels/1 function: Validates jump targets within bounds",
+        "terminates/2 function: Validates bounded execution",
+        "No infinite loops in random generation",
+        "All functions compile without warnings"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Minimal PBT framework without external dependencies. Use bounded depth (5) to prevent explosion."
+    },
+    {
+      "id": "US-008",
+      "title": "Create wf_test_term.erl for bytecode structure validation",
+      "acceptance_criteria": [
+        "Module test/wf_test_term.erl created and compiles without warnings",
+        "Valid opcode test: All wf_vm:opcode() variants accepted",
+        "Invalid opcode test: Malformed opcodes rejected by well_formed/1",
+        "Label resolution test: Valid jumps accepted, out-of-bounds rejected",
+        "Structural property test: Balanced scopes, no orphaned branches",
+        "Property test: Random terms are well-formed (100 iterations)",
+        "Property test: Random terms have valid labels (100 iterations)",
+        "Property test: Random terms terminate within bounded steps (100 iterations)",
+        "Property test: Well-formed terms can be executed (100 iterations)",
+        "Reproducibility test: Same seed produces same term",
+        "All tests pass: rebar3 eunit --module wf_test_term"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Placeholder for AST tests since wf_term.erl doesn't exist yet. Tests bytecode structure directly."
+    },
+    {
+      "id": "US-009",
+      "title": "Create wf_test_helpers.erl and docs/TESTING.md",
+      "acceptance_criteria": [
+        "Module test/wf_test_helpers.erl created and compiles",
+        "exec_until_done/1: Execute workflow until completion",
+        "exec_steps/2: Execute N steps manually",
+        "get_token_statuses/1: Extract all token statuses",
+        "count_tokens_with_status/2: Count tokens by status",
+        "assert_join_counter/2: Assert join counter state",
+        "docs/TESTING.md created with test organization overview",
+        "docs/TESTING.md documents how to run tests (rebar3 eunit)",
+        "docs/TESTING.md documents coverage goals (>80%)",
+        "docs/TESTING.md documents property-based testing approach",
+        "docs/TESTING.md documents reproduction of failing tests",
+        "All test modules listed in wf_substrate_tests.erl",
+        "Full test suite passes: rebar3 eunit",
+        "Coverage report generated: rebar3 cover",
+        "Test execution time <30 seconds for full suite"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Helper module centralizes common test utilities. Documentation essential for maintainability."
+    }
+  ]
+}

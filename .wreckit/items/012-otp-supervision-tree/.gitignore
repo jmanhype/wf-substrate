@@ -1,0 +1,12 @@
+# Ignore test coverage outputs
+*.coverdata
+eunit.coverdata
+
+# Ignore rebar3 build artifacts
+_rebar/
+*.ez
+
+# Ignore editor temporary files
+*~
+*.swp
+*.swo

@@ -18,6 +18,7 @@
     {atom(), mi_policy()} |                   %% MI_SPAWN with policy
     {atom(), {enter | exit, term()}} |        %% CANCEL_SCOPE with enter/exit
     {atom(), atom()} |                        %% TASK_EXEC with task name
+    {'APPROVAL_WAIT', term()} |              %% APPROVAL_WAIT with approval spec
     {atom()}.                                 %% DONE (no args)
 
 %% Join policies

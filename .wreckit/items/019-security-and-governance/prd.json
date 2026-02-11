@@ -1,0 +1,266 @@
+{
+  "schema_version": 1,
+  "id": "019-security-and-governance",
+  "branch_name": "wreckit/019-security-and-governance",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Create governance error records and types",
+      "acceptance_criteria": [
+        "wf_governance.hrl file exists with #governance_error{} record definition",
+        "Record includes error_type, scope, task_id, detail, timestamp fields",
+        "Error type enum includes allowlist_violation, budget_exceeded, timeout, approval_required",
+        "All type definitions compile without errors",
+        "Types are exported and documented with -export_type attributes"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Foundational data structures for all governance features. Follows pattern from wf_validate #issue{} record. Must be defined before implementing governance modules."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement wf_governance policy management module",
+      "acceptance_criteria": [
+        "wf_governance.erl module implements gen_server behavior",
+        "ETS table wf_governance_policies is created on init",
+        "set_allowlist/2 stores effect type allowlist for scope",
+        "get_allowlist/1 retrieves allowlist or returns {error, not_found}",
+        "set_budget/2 stores budget limits for case",
+        "get_budget/1 retrieves budget limits or returns {error, not_found}",
+        "set_timeout_policy/2 stores timeout policy for case/scope",
+        "get_timeout_policy/1 retrieves timeout policy or returns {error, not_found}",
+        "require_approval/2 associates approval spec with task in scope",
+        "get_approval_config/1 retrieves approval config or returns {error, not_found}",
+        "gen_server handle_call/handle_cast/handle_info/2 handle all messages",
+        "terminate/2 cleans up ETS table",
+        "All API functions have -spec type specifications"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Core policy storage and management. Uses ETS table pattern from wf_trace.erl:82-93. Must be running before any enforcement can work."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement wf_budget tracking module",
+      "acceptance_criteria": [
+        "wf_budget.erl module implements gen_server behavior",
+        "ETS table wf_budgets is created on init",
+        "init_budget/2 creates initial budget state with zero counts",
+        "check_budget/1 returns ok if within all limits",
+        "check_budget/1 returns {error, #governance_error{}} if any limit exceeded",
+        "increment_effect_count/1 atomically increases effect count",
+        "add_effect_time/2 atomically adds execution time in microseconds",
+        "add_effect_cost/2 atomically adds cost to total",
+        "get_budget_state/1 returns current budget state",
+        "Budget checks enforce max_effects limit",
+        "Budget checks enforce max_time_us limit",
+        "Budget checks enforce max_cost limit",
+        "All mutations are atomic via gen_server serialization"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Budget tracking with O(1) checks. Limits checked before effect execution. Critical for resource isolation in multi-tenant environments."
+    },
+    {
+      "id": "US-004",
+      "title": "Implement wf_effect_stub module with governance hooks",
+      "acceptance_criteria": [
+        "wf_effect_stub.erl module exists",
+        "new_spec/5 creates #effect_spec{} record with cost field",
+        "yield/4 calls wf_governance:get_allowlist/1 before execution",
+        "yield/4 rejects effects not in allowlist with allowlist_violation error",
+        "yield/4 calls wf_budget:check_budget/1 before execution",
+        "yield/4 rejects effects exceeding budget with budget_exceeded error",
+        "yield/4 executes mock effect when all checks pass",
+        "get_effect_cost/1 returns cost from effect_spec record",
+        "Module includes TODO comments for integration with real wf_effect",
+        "All functions have -spec type specifications"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Stub module provides governance integration point for item 010. Must match planned wf_effect interface. Real implementation will replace stub when item 010 completes."
+    },
+    {
+      "id": "US-005",
+      "title": "Extend wf_exec token record with blocked_approval status",
+      "acceptance_criteria": [
+        "#token{} record updated to include blocked_approval in status enum",
+        "wf_exec compiles without errors after token change",
+        "is_blocked/1 function checks for blocked_approval status",
+        "Existing tests pass with updated token record",
+        "Token record documentation updated with new status"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Token status extension needed for approval gate support. Line 33 in wf_exec.erl must add blocked_approval to status type."
+    },
+    {
+      "id": "US-006",
+      "title": "Add APPROVAL_WAIT opcode to wf_vm",
+      "acceptance_criteria": [
+        "wf_vm opcode() type includes {'APPROVAL_WAIT', term()}",
+        "wf_vm.erl compiles without errors",
+        "Opcode documentation includes APPROVAL_WAIT description",
+        "Existing tests pass with new opcode"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "New opcode for approval yielding in bytecode. Follows pattern from existing opcodes like CANCEL_SCOPE."
+    },
+    {
+      "id": "US-007",
+      "title": "Implement wf_approval gate management module",
+      "acceptance_criteria": [
+        "wf_approval.erl module implements gen_server behavior",
+        "ETS table wf_approvals is created on init",
+        "request_approval/2 blocks caller until approval signal received",
+        "signal/2 approves or rejects pending approval",
+        "signal/2 returns {error, not_found} for non-existent approval",
+        "signal/2 returns {error, already_processed} for completed approval",
+        "check_approval/1 returns current approval status",
+        "cancel_approval/1 cancels pending approval and cleans up timer",
+        "Approval timeout triggers configured action (cancel/default/escalate)",
+        "Timeout timer is cancelled when approval signaled",
+        "handle_info/2 handles {approval_timeout, ApprovalId} messages",
+        "All API functions have -spec type specifications"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Approval gate system blocks execution until external approval. Timeout with configurable actions ensures operations don't block indefinitely. Critical for human-in-the-loop workflows."
+    },
+    {
+      "id": "US-008",
+      "title": "Add timeout policy enforcement to wf_governance",
+      "acceptance_criteria": [
+        "wf_governance:set_timeout_policy/2 accepts {case_timeout, Ms} tuples",
+        "wf_governance:set_timeout_policy/2 accepts {task_timeout, Ms} tuples",
+        "wf_governance:set_timeout_policy/2 accepts {effect_timeout, Ms} tuples",
+        "Case timeout schedules erlang:send_after/3 timer",
+        "Timeout handler produces #governance_error{} with error_type = timeout",
+        "Timeout includes scope and timestamp in error record",
+        "Timeout handlers registered in handle_info/2",
+        "TODO comments added for wf_cancel integration"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Timeout enforcement at three levels (case/task/effect). Produces structured errors for audit trail. Will integrate with wf_cancel for actual cancellation when item 008 completes."
+    },
+    {
+      "id": "US-009",
+      "title": "Integrate governance servers into application supervision tree",
+      "acceptance_criteria": [
+        "wf_governance added to wf_substrate_sup children list",
+        "wf_budget added to wf_substrate_sup children list",
+        "wf_approval added to wf_substrate_sup children list",
+        "Application starts without errors with all servers",
+        "All servers are registered in application configuration",
+        "Server shutdown order is correct (dependencies start first)"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Supervision ensures fault tolerance. If any server crashes, supervisor restarts it. Critical for production reliability."
+    },
+    {
+      "id": "US-010",
+      "title": "Create comprehensive unit tests for governance modules",
+      "acceptance_criteria": [
+        "wf_governance_tests.erl test module exists",
+        "Tests for set/get allowlist operations",
+        "Tests for set/get budget operations",
+        "Tests for set/get timeout policies",
+        "Tests for set/get approval configs",
+        "Tests for ETS table operations",
+        "Tests for concurrent access patterns",
+        "wf_budget_tests.erl test module exists",
+        "Tests for budget initialization",
+        "Tests for budget checking (all limit types)",
+        "Tests for budget increments (count, time, cost)",
+        "Tests for budget exhaustion detection",
+        "wf_approval_tests.erl test module exists",
+        "Tests for approval request and signal flow",
+        "Tests for approval timeout with all action types",
+        "Tests for approval rejection",
+        "Tests for concurrent approval requests",
+        "wf_effect_stub_tests.erl test module exists",
+        "Tests for allowlist enforcement",
+        "Tests for budget enforcement",
+        "Tests for error production",
+        "All tests pass with rebar3 eunit",
+        "Test coverage exceeds 80%"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Comprehensive test coverage ensures correctness. Unit tests should cover all code paths including error conditions."
+    },
+    {
+      "id": "US-011",
+      "title": "Create integration tests for governance enforcement",
+      "acceptance_criteria": [
+        "Integration test module exists (wf_governance_integration_tests.erl)",
+        "Test for allowlist + budget enforcement combined",
+        "Test for timeout policy enforcement at all levels",
+        "Test for approval gate flow (request, wait, signal, resume)",
+        "Test for governance error structure verification",
+        "Test for multiple independent cases with separate policies",
+        "Test for policy non-interference (case1 policies don't affect case2)",
+        "End-to-end test with governance enabled workflow",
+        "All integration tests pass"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Integration tests verify modules work together correctly. Tests should use real wf_exec executor with governance checks enabled."
+    },
+    {
+      "id": "US-012",
+      "title": "Create property-based tests for budget invariants",
+      "acceptance_criteria": [
+        "Property test module exists (wf_governance_props.erl)",
+        "Property: budget never exceeds configured limits",
+        "Property: allowlist only allows configured effect types",
+        "Property: multiple cases have independent budgets",
+        "Property: budget checks are idempotent",
+        "Property: budget increments are atomic",
+        "Property tests run with properqc",
+        "No counterexamples found for any property"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Property-based tests find edge cases and verify invariants. Critical for correctness of budget accounting which handles concurrent access."
+    },
+    {
+      "id": "US-013",
+      "title": "Create governance API documentation",
+      "acceptance_criteria": [
+        "doc/governance.md file exists",
+        "Document describes all governance features",
+        "Document includes API reference for all exported functions",
+        "Document includes usage examples for allowlists",
+        "Document includes usage examples for budgets",
+        "Document includes usage examples for timeouts",
+        "Document includes usage examples for approvals",
+        "Document includes error record structure",
+        "Document includes integration notes for items 008/010",
+        "Documentation builds with rebar3 edoc"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Documentation enables users to adopt governance features. Should include examples and best practices. Must clearly mark stub integration points."
+    },
+    {
+      "id": "US-014",
+      "title": "Create performance benchmarks for governance checks",
+      "acceptance_criteria": [
+        "bench/governance_bench.erl module exists",
+        "Benchmark for budget check overhead (10000 iterations)",
+        "Benchmark for allowlist check overhead (10000 iterations)",
+        "Benchmark for approval request/signaling latency",
+        "Benchmark for ETS table read/write performance",
+        "Benchmark results show < 100us per check",
+        "Benchmark code compiles and runs"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Performance tests verify governance overhead is acceptable. Budget and allowlist checks are on hot path and must be fast (< 100us)."
+    }
+  ]
+}
