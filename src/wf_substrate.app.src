@@ -1,7 +1,7 @@
 {application, wf_substrate,
  [{description, "Workflow pattern substrate for compiled pattern execution"},
   {vsn, "0.1.0"},
-  {registered, [wf_substrate_sup]},
+  {registered, [wf_substrate_sup, wf_case_sup]},
   {mod, {wf_substrate_app, []}},
   {applications,
    [kernel,
@@ -9,7 +9,21 @@
     sasl
    ]},
   {env,[]},
-  {modules, []},
+  {modules, [
+    wf_substrate_app,
+    wf_substrate_sup,
+    wf_substrate,
+    wf_case_sup,
+    wf_case_runner,
+    wf_exec,
+    wf_sched,
+    wf_state,
+    wf_trace,
+    wf_mi,
+    wf_governance,
+    wf_budget,
+    wf_approval
+  ]},
   {licenses, ["Apache-2.0"]},
   {links, []}
  ]}.
