@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "049-target-rebar3-eunit-with-0-failures-0-cancelled",
+  "title": "Target: rebar3 eunit with 0 failures, 0 cancelled.",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T21:41:27.669Z",
+  "updated_at": "2026-02-11T21:41:27.669Z"
+}

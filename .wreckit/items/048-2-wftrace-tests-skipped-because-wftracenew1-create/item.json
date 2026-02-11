@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "048-2-wftrace-tests-skipped-because-wftracenew1-create",
+  "title": "2. wf_trace tests skipped because wf_trace:new/1 creates named ETS table that conflicts when called multiple times - fix wf_trace:new/1 to handle already-existing table (check with ets:whereis or try/catch the create)",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T21:41:27.668Z",
+  "updated_at": "2026-02-11T21:41:27.668Z"
+}
