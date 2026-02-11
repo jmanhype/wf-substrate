@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "005-executor-hot-loop",
+  "title": "Implement bytecode executor hot loop",
+  "state": "idea",
+  "overview": "Implement wf_exec.erl: the bytecode reducer/executor. Core is a tight loop over compiled wf_bc() bytecode with an explicit exec_state record containing: instruction pointer (IP), branch tracking (active branches map), join counters (per join point), scope stack (for cancel regions), token set, and reduction counter.\n\nThe step/2 function executes a single instruction and returns the updated exec_state. The run/3 function steps in configurable quanta (N reductions per tick) then yields {yield, State} or {done, State} or {effect, EffectSpec, Continuation, State}. This enables cooperative scheduling — the executor never blocks indefinitely.\n\nNo 'case NodeType of' dispatch — all branching is resolved by the bytecode. The executor is a flat instruction-pointer-driven machine. Each opcode handler is a clause in a single dispatch function. Handle PAR_FORK by spawning branch entries in the branch map, JOIN_WAIT by checking/decrementing counters, XOR_CHOOSE by jumping to selected branch, CANCEL_SCOPE by pushing/popping the scope stack.\n\nExport: new/1 (from wf_bc()), step/2, run/3, is_done/1, is_blocked/1.",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-10T00:00:00.000Z",
+  "updated_at": "2026-02-10T00:00:00.000Z"
+}

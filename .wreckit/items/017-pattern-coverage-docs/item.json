@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "017-pattern-coverage-docs",
+  "title": "Write pattern coverage and operational documentation",
+  "state": "idea",
+  "overview": "Write comprehensive documentation:\n\ndocs/PATTERNS.md: table mapping each of the 43 workflow patterns (from the van der Aalst et al. workflow pattern catalog) to its wf_substrate representation. For each pattern: pattern number, pattern name, category (basic/advanced branching/structural/multiple instance/state-based/cancellation), wf_term() expression, compilation sketch (which opcodes are used), key test module(s), known corner cases or limitations. Patterns that are directly supported as kernel primitives vs. derived from primitives should be clearly distinguished.\n\ndocs/TESTING.md: testing strategy document. Covers: test organization (unit/integration/property/benchmark), how to run tests (rebar3 eunit, rebar3 ct), test naming conventions, how to add new pattern tests, the minimal property-based framework usage, determinism/replay testing methodology, how benchmarks are structured and interpreted.\n\ndocs/OPERATIONS.md: operational guide. Covers: supervision tree structure and restart strategies, failure modes and recovery (what happens when a case runner crashes, effect timeout, state corruption detection), telemetry/tracing configuration (trace levels, sinks, log format), monitoring a running system (how to inspect active cases, check for stuck workflows), configuration options (scheduler policy, quantum size, timeouts, effect budgets).",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-10T00:00:00.000Z",
+  "updated_at": "2026-02-10T00:00:00.000Z"
+}

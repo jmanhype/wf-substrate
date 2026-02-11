@@ -6,7 +6,7 @@
   "agent": {
     "kind": "claude_sdk",
     "model": "claude-sonnet-4-20250514",
-    "max_tokens": 4096
+    "max_tokens": 16384
   },
   "max_iterations": 100,
   "timeout_seconds": 3600,
@@ -14,7 +14,7 @@
     "commands": [],
     "secret_scan": false,
     "require_all_stories_done": true,
-    "allow_unsafe_direct_merge": false,
+    "allow_unsafe_direct_merge": true,
     "allowed_remote_patterns": []
   },
   "branch_cleanup": {

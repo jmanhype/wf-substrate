@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "020-ci-and-acceptance",
+  "title": "Implement CI pipeline and acceptance tests",
+  "state": "idea",
+  "overview": "Implement CI scripts and an acceptance test runner for the wf_substrate project.\n\nCI pipeline (GitHub Actions or similar shell scripts):\n1. rebar3 compile — verify clean compilation with no warnings (warnings_as_errors).\n2. rebar3 eunit — run all EUnit test suites, fail on any test failure.\n3. rebar3 ct — run Common Test suites if any (for integration tests).\n4. rebar3 dialyzer — run Dialyzer for type checking (optional but recommended).\n5. Acceptance test runner.\n\nAcceptance test runner (wf_acceptance.erl or shell script) that validates the following end-to-end criteria:\n1. All unit tests pass (wf_test_*.erl modules).\n2. Validator correctly detects a known-deadlocked workflow (construct a deliberately deadlocked term, run wf_validate, assert deadlock is reported).\n3. Cancellation correctness: run a workflow with cancel region, trigger cancel mid-execution, verify no scope corruption and proper cancel events.\n4. Determinism: run same workflow twice with deterministic scheduler, assert identical traces.\n5. Replay: run with nondeterministic scheduler, record, replay, verify match.\n6. Benchmarks: run wf_bench:run_all/0, verify it completes without error, report metrics to stdout.\n7. Documentation completeness: verify that docs/ARCHITECTURE.md, docs/SEMANTICS.md, docs/PATTERNS.md, docs/TESTING.md, and docs/OPERATIONS.md all exist and are non-empty.\n\nThe acceptance runner exits 0 on full pass, 1 on any failure, with a summary report of pass/fail per criterion.",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-10T00:00:00.000Z",
+  "updated_at": "2026-02-10T00:00:00.000Z"
+}

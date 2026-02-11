@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "012-otp-supervision-tree",
+  "title": "Implement OTP supervision tree and public API",
+  "state": "idea",
+  "overview": "Implement the OTP supervision tree and public API for wf_substrate.\n\nSupervision hierarchy:\n- wf_substrate_sup: top-level supervisor (one_for_one), starts wf_case_sup and optional singletons.\n- wf_case_sup: dynamic supervisor (simple_one_for_one) for per-case runner processes.\n- wf_effect_sup (optional): dynamic supervisor for effect handler processes if effects are executed in-process.\n- wf_trace_sink: optional gen_server that collects trace events from all cases (for centralized logging/monitoring).\n\nPer-case runner as gen_statem with states: {initializing, running, waiting_effect, waiting_signal, cancelled, done}. The runner holds the exec_state, steps in configurable bursts (N reductions then yield to scheduler), handles incoming signals (external events that feed into XOR choices or task completions), effect responses, and cancel requests. Uses state_timeout for overall case timeout.\n\nPublic API module wf_substrate.erl exports:\n- new_case/3 :: (CaseId, wf_term(), Ctx) -> {ok, Pid} — compile term, create runner.\n- signal/2 :: (CaseId, Signal) -> ok — send external signal to running case.\n- cancel/1 :: (CaseId) -> ok — cancel entire case.\n- cancel_region/2 :: (CaseId, ScopeId) -> ok — cancel a region within a case.\n- await/2 :: (CaseId, Timeout) -> {ok, Result} | {error, Reason} — block until case completes.\n- status/1 :: (CaseId) -> Status — get current case status.\n- trace/3 :: (CaseId, Level, Sink) -> ok — configure tracing for a case.\n- validate/2 :: (wf_term(), Options) -> ok | {error, Issues} — static validation without execution.\n\nInclude wf_substrate_app.erl (application behaviour) that starts wf_substrate_sup.",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-10T00:00:00.000Z",
+  "updated_at": "2026-02-10T00:00:00.000Z"
+}

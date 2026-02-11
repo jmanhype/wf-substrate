@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "009-multiple-instance-support",
+  "title": "Implement multiple instance patterns",
+  "state": "idea",
+  "overview": "Implement wf_mi.erl: multiple instance patterns from the workflow pattern catalog.\n\nInstance creation modes:\n1. Fixed count: N instances determined at compile time (mi/2 with {fixed, N} config).\n2. Runtime count: N determined at runtime from ctx() (mi/2 with {dynamic, Fun} config where Fun :: ctx() -> pos_integer()).\n3. With synchronization barrier: all instances must complete before continuation (join policy: wait_all).\n4. Without synchronization: instances are fire-and-forget, continuation proceeds immediately.\n\nJoin policies for MI completion:\n- wait_all: block until every instance completes.\n- wait_n: block until N of M instances complete, cancel remainder.\n- first_complete: block until first instance completes, cancel all others (discriminator pattern for MI).\n\nInstance spawning: each instance gets a unique instance_id, its own token, and a copy of the body bytecode (or shared reference with instance-local state). Instance collection: completed instances report results to a collector that evaluates the join policy.\n\nIntegrated with wf_exec: MI_SPAWN opcode creates instance entries in the branch map, JOIN_WAIT handles MI join policies. Integrates with wf_cancel for cancelling remaining instances when join is satisfied.\n\nExport: spawn_instances/4, collect_result/3, check_join/2, cancel_remaining/2.",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-10T00:00:00.000Z",
+  "updated_at": "2026-02-10T00:00:00.000Z"
+}

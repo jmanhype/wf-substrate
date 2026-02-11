@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "001-rebar3-project-scaffold",
+  "title": "Set up rebar3 project scaffold",
+  "state": "idea",
+  "overview": "Set up rebar3 project structure for the wf_substrate OTP application. Create rebar.config (no external deps, OTP 26+ minimum), app.src with proper application metadata, and standard directory layout: src/ for source modules, test/ for EUnit and CT suites, docs/ for documentation. Include a .gitignore appropriate for Erlang/rebar3 projects (_build/, .rebar3, erl_crash.dump, etc.). The project should compile cleanly with `rebar3 compile` and run `rebar3 eunit` with zero tests. No external dependencies — pure Erlang/OTP only.",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-10T00:00:00.000Z",
+  "updated_at": "2026-02-10T00:00:00.000Z"
+}

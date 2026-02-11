@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "006-state-store-and-atomic-commit",
+  "title": "Implement state store with atomic commit protocol",
+  "state": "idea",
+  "overview": "Implement wf_state.erl: per-case state store with atomic commit protocol. The state store holds: ctx() (user-provided context map, opaque to the engine), token tracking (which tokens are active, where they are), scope metadata (cancel scopes, their status), and execution metadata (step count, timestamps).\n\nState updates are buffered during a reduction quantum and only applied at commit boundaries via commit/1. This ensures that a crash mid-quantum does not leave partial state. The commit protocol: buffer mutations during steps -> validate consistency -> apply atomically -> produce receipt.\n\nAll mutations produce receipts (wf_receipt records) capturing what changed, when, and why. Receipts form an append-only log.\n\nExport: new/1 (initial ctx), get_ctx/1, put_ctx/2, add_token/3, remove_token/2, get_tokens/1, enter_scope/2, exit_scope/2, get_scope/2, buffer_mutation/2, commit/1, rollback/1, snapshot/1, restore/2.\n\nInclude -type state() and -type mutation() specs.",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-10T00:00:00.000Z",
+  "updated_at": "2026-02-10T00:00:00.000Z"
+}

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "015-determinism-and-replay-tests",
+  "title": "Implement determinism and replay test suites",
+  "state": "idea",
+  "overview": "Implement test suites validating determinism and replay correctness:\n\nDeterminism tests:\n- Run the same workflow case twice with the deterministic scheduler policy and identical inputs.\n- Assert that both executions produce identical trace event sequences (same step_seq, same opcodes, same state transitions).\n- Test with: simple sequence, parallel split+join, nested par in seq, XOR with deterministic signal, MI with fixed count.\n- Verify that deterministic policy produces stable ordering regardless of Erlang scheduler timing.\n\nReplay tests:\n- Run a workflow case with the nondeterministic scheduler policy (random seed).\n- Record the scheduler choice log and any effect results.\n- Create a replay scheduler from the recorded log.\n- Re-run the same case with the replay scheduler.\n- Assert that the replay produces an identical trace to the original run.\n- Test replay divergence detection: modify the workflow term slightly, attempt replay with old log, verify the replay scheduler detects divergence and fails with a clear error.\n\nReceipt stability tests:\n- For pure steps (no real effects, mock effect handler), verify that receipts are identical across replay runs.\n- Verify receipt hashes match for the same effect spec.\n- Verify that replayed effects with idempotency keys return cached results.\n\nAll tests use EUnit. Include helper functions for comparing traces and formatting diff output on failure.",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-10T00:00:00.000Z",
+  "updated_at": "2026-02-10T00:00:00.000Z"
+}

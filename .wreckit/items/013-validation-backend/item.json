@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "013-validation-backend",
+  "title": "Implement validation backend with bounded model checking",
+  "state": "idea",
+  "overview": "Implement wf_validate.erl: static analysis and bounded model checking for workflow terms. This is a test/validation tool, NOT the runtime execution engine.\n\nCompile wf_term() into a simplified Petri net representation (places = states, transitions = actions, tokens = control flow markers) or labelled transition system (LTS) for state space exploration.\n\nBounded state exploration with configurable depth D (max steps) and token bound K (max concurrent tokens). The explorer performs BFS/DFS over reachable states.\n\nChecks:\n1. No dead transitions: every transition in the net is firable in at least one reachable state (no unreachable code).\n2. Option to complete: from every reachable state, there exists a path to a terminal state (no livelocks).\n3. Proper completion: when the workflow terminates, exactly one token is in the final place (no leftover tokens, no missing completion).\n4. Deadlock detection: no reachable state where tokens exist but no transition is enabled.\n5. Soundness: combination of proper completion + option to complete + no dead transitions.\n\nExport: validate/1 (default options), validate/2 (with options), to_petri_net/1, explore/2, check_soundness/1, check_deadlock/1, check_proper_completion/1. Return structured results: {ok, report()} | {error, [issue()]} where issue includes the problematic state and a diagnostic message.",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-10T00:00:00.000Z",
+  "updated_at": "2026-02-10T00:00:00.000Z"
+}
