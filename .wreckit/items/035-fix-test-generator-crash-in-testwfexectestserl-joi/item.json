@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "035-fix-test-generator-crash-in-testwfexectestserl-joi",
+  "title": "Fix test generator crash in test/wf_exec_tests.erl: join_wait_test_/0 fails with badmatch error. The wf_exec:step/2 function returns a tuple that does not match the expected {ExecState, Trace} pattern — likely the PAR_FORK or JOIN_WAIT opcodes return additional data. Check the actual return type of wf_exec:step/2 for parallel opcodes and fix the test to match. The 5 cancelled tests in rebar3 eunit are from this generator crash. Target: 0 failures, 0 cancelled.",
+  "state": "critique",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T20:54:46.607Z",
+  "updated_at": "2026-02-11T21:00:53.917Z"
+}
