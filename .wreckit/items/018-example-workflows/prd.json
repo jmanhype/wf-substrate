@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "id": "018-example-workflows",
+  "branch_name": "wreckit/018-example-workflows",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Create Basic Example Module (wf_example_basic.erl)",
+      "acceptance_criteria": [
+        "Module exports term/0, run/0, and expected_trace_structure/0 functions",
+        "term/0 returns vending machine workflow bytecode: seq(task(insert_coin), xor([seq(task(select_drink), task(dispense)), task(refund)]))",
+        "Bytecode uses SEQ_ENTER, SEQ_NEXT, XOR_CHOOSE, TASK_EXEC, DONE opcodes",
+        "run/0 creates trace state with wf_trace:new(full), executes workflow with wf_exec:run/3, retrieves events with wf_trace:get_events/1",
+        "run/0 prints execution summary to console (steps, tokens, trace count, detailed trace)",
+        "run/0 returns {ok, Events} where Events is list of #trace_event{} records",
+        "expected_trace_structure/0 returns list of opcode category atoms: [seq_enter, task_exec, xor_choose, seq_enter, task_exec, seq_next, task_exec, done]",
+        "Module compiles without errors: erlc -I src -o ebin src/wf_example_basic.erl",
+        "Running wf_example_basic:run() from Erlang shell executes successfully",
+        "Actual trace structure matches expected structure",
+        "Includes detailed comments explaining each opcode and pattern"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Follows pattern from test modules (wf_test_seq.erl:17-24) but with narrative, educational focus"
+    },
+    {
+      "id": "US-002",
+      "title": "Create Discriminator Example Module (wf_example_discriminator.erl)",
+      "acceptance_criteria": [
+        "Module exports term/0, run/0, and expected_trace_structure/0 functions",
+        "term/0 returns discriminator workflow bytecode: par([task(approve_manager), task(approve_director), task(approve_vp)]) with first_complete join",
+        "Bytecode uses PAR_FORK, JOIN_WAIT with first_complete policy, TASK_EXEC, DONE opcodes",
+        "run/0 creates executor, runs workflow, collects trace, prints summary including tokens grouped by status",
+        "run/0 returns {ok, Events}",
+        "expected_trace_structure/0 returns [par_fork, task_exec, done, join_wait, task_exec, done] (first branch completes)",
+        "Module compiles and executes without errors",
+        "PAR_FORK creates 3 parallel approval branches",
+        "JOIN_WAIT with first_complete fires after first branch completes",
+        "Document that automatic cancellation of remaining branches not yet implemented (item 008)",
+        "Includes comments explaining discriminator pattern"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Pattern from wf_test_par.erl:66-76 (first_complete join)"
+    },
+    {
+      "id": "US-003",
+      "title": "Create Cancel Region Example Module (wf_example_cancel_region.erl)",
+      "acceptance_criteria": [
+        "Module exports term/0, run/0, and expected_trace_structure/0 functions",
+        "term/0 returns cancel region bytecode: seq(task(start_process), cancel_region(seq(task(long_task), task(another_long_task))), task(continue_main))",
+        "Bytecode uses CANCEL_SCOPE with {enter, ScopeId} and {exit, ScopeId}, SEQ_ENTER, SEQ_NEXT, TASK_EXEC, DONE",
+        "run/0 executes workflow, prints summary, returns {ok, Events}",
+        "run/0 prints limitation message: 'Cancellation is stubbed (wf_exec.erl:512-529)'",
+        "expected_trace_structure/0 returns full workflow trace (all tasks execute since cancellation stubbed)",
+        "expected_trace_structure/0 includes cancel_scope_enter and cancel_scope_exit categories",
+        "Module compiles and executes without errors",
+        "Trace shows CANCEL_SCOPE opcodes executing",
+        "Documents that cancellation is stubbed (item 008 incomplete)",
+        "extract_category/1 converts cancel_scope to cancel_scope_enter/cancel_scope_exit atoms"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Cancellation stub in wf_exec.erl:512-529, example shows structure but won't actually cancel"
+    },
+    {
+      "id": "US-004",
+      "title": "Create Multiple Instances Example Module (wf_example_multiple_instances.erl)",
+      "acceptance_criteria": [
+        "Module exports term/0, run/0, and expected_trace_structure/0 functions",
+        "term/0 returns MI workflow bytecode using PAR_FORK workaround: 5 parallel instances with {wait_n, 3} join",
+        "Bytecode uses PAR_FORK (simulating MI_SPAWN), JOIN_WAIT with {wait_n, 3}, TASK_EXEC, DONE",
+        "run/0 executes workflow, prints summary including tokens by status, returns {ok, Events}",
+        "run/0 prints limitation message: 'Using PAR_FORK to simulate MI_SPAWN (awaiting item 009)'",
+        "expected_trace_structure/0 returns [par_fork, task_exec, done, task_exec, done, task_exec, done, join_wait, task_exec, done]",
+        "Module compiles and executes without errors",
+        "PAR_FORK creates 5 parallel branches (simulating 5 MI instances)",
+        "JOIN_WAIT with {wait_n, 3} fires after 3 of 5 branches complete",
+        "Document that MI_SPAWN opcode not implemented (item 009 incomplete)",
+        "Includes comments explaining PAR_FORK workaround"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "MI_SPAWN opcode has no handler, using PAR_FORK workaround per wf_test_par.erl:54-64"
+    },
+    {
+      "id": "US-005",
+      "title": "Create Test Module (wf_test_examples.erl)",
+      "acceptance_criteria": [
+        "Module uses EUnit: -include_lib(\"eunit/include/eunit.hrl\")",
+        "Exports 11 EUnit tests (4 trace structure + 7 pattern validation)",
+        "example_basic_trace_structure_test: Compares actual trace to expected from wf_example_basic:expected_trace_structure/0",
+        "example_basic_completes_successfully_test: Verifies last event is 'done'",
+        "example_discriminator_trace_structure_test: Compares actual trace to expected from wf_example_discriminator",
+        "example_discriminator_parallel_fork_test: Verifies PAR_FORK events present",
+        "example_discriminator_first_complete_test: Verifies JOIN_WAIT events present",
+        "example_cancel_region_trace_structure_test: Compares actual trace to expected from wf_example_cancel_region",
+        "example_cancel_region_has_cancel_scopes_test: Verifies CANCEL_SCOPE events present (at least 2)",
+        "example_multiple_instances_trace_structure_test: Compares actual trace to expected from wf_example_multiple_instances",
+        "example_multiple_instances_parallel_fork_test: Verifies PAR_FORK events present",
+        "example_multiple_instances_wait_n_test: Verifies JOIN_WAIT events present",
+        "Helper function extract_categories/1 extracts opcode categories from event list",
+        "Helper function extract_category/1 extracts opcode from single event, handles {OpName, {enter, Scope}} and {OpName, {exit, Scope}}",
+        "Helper function is_cancel_scope_event/1 checks if category is cancel_scope_enter or cancel_scope_exit",
+        "Module compiles without errors",
+        "All 11 tests pass: rebar3 eunit --module=wf_test_examples"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Follows pattern from existing test modules (wf_test_seq, wf_test_par, wf_test_xor)"
+    }
+  ]
+}
