@@ -20,7 +20,7 @@
         "Includes detailed comments explaining each opcode and pattern"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Follows pattern from test modules (wf_test_seq.erl:17-24) but with narrative, educational focus"
     },
     {
@@ -40,7 +40,7 @@
         "Includes comments explaining discriminator pattern"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Pattern from wf_test_par.erl:66-76 (first_complete join)"
     },
     {
@@ -60,7 +60,7 @@
         "extract_category/1 converts cancel_scope to cancel_scope_enter/cancel_scope_exit atoms"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Cancellation stub in wf_exec.erl:512-529, example shows structure but won't actually cancel"
     },
     {
@@ -80,7 +80,7 @@
         "Includes comments explaining PAR_FORK workaround"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "MI_SPAWN opcode has no handler, using PAR_FORK workaround per wf_test_par.erl:54-64"
     },
     {
@@ -106,7 +106,7 @@
         "All 11 tests pass: rebar3 eunit --module=wf_test_examples"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Follows pattern from existing test modules (wf_test_seq, wf_test_par, wf_test_xor)"
     }
   ]

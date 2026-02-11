@@ -263,3 +263,350 @@ Tests:
 - `get_token_statuses/1`: Extract all token statuses
 - `count_tokens_with_status/2`: Count tokens by status
 - `assert_join_counter/2`: Assert join counter state
+
+## Determinism and Replay Testing
+
+### Determinism Tests
+
+The wf_test_determinism.erl module verifies that workflow execution is deterministic when using the deterministic scheduler policy.
+
+**Key Tests:**
+- `determinism_simple_seq_test/0`: Sequence executes identically across runs
+- `determinism_par_3_branches_test/0`: Parallel workflows produce stable traces
+- `determinism_par_stability_test_/0`: Stability across 10 parallel executions
+- `determinism_nested_par_in_seq_test/0`: Nested patterns are deterministic
+- `determinism_xor_branch_test/0`: XOR branch selection is stable
+- `determinism_xor_stability_test_/0`: XOR stability across 20 runs
+- `determinism_mi_fixed_count_test/0`: Multiple instances are deterministic
+- `determinism_concurrent_execution_test/0`: Concurrent executions produce structurally identical traces
+
+### Trace Comparison Methodology
+
+From wf_test_trace_helpers.erl:18-49:
+
+```erlang
+%% Compare two trace event lists, return ok | {error, Diff}
+compare_traces(Events1, Events2) ->
+    %% Compares step_seq, opcode, state_before, state_after
+    %% Excludes timestamp (always different) and metadata
+```
+
+**Fields Compared:**
+- `step_seq`: Step sequence number
+- `opcode`: Opcode executed (e.g., `{'TASK_EXEC', task_a}`)
+- `state_before`: Executor state snapshot before opcode
+- `state_after`: Executor state snapshot after opcode
+
+**Fields Excluded:**
+- `timestamp`: Always different between runs
+- `metadata`: May contain runtime-specific data
+
+**Diff Format:**
+```erlang
+{error, [{Field, Index}, ...]}  %% Field mismatch at step Index
+{error, {length_mismatch, Len1, Len2}}  %% Different trace lengths
+```
+
+### Running Determinism Tests
+
+```bash
+# Run all determinism tests
+rebar3 eunit --module=wf_test_determinism
+
+# Run specific test
+rebar3 eunit --test=wf_test_determinism:determinism_simple_seq_test
+```
+
+### Replay Testing
+
+The wf_test_replay.erl module tests replay log generation and execution (see wf_trace.erl:182-224).
+
+**Replay Log Format (from wf_trace.hrl):**
+```erlang
+-record(replay_entry, {
+    step_seq :: non_neg_integer(),
+    opcode :: wf_vm:opcode() | undefined,
+    scheduler_choice :: wf_sched:choice_entry() | undefined,  % NOT IMPLEMENTED
+    effect_result :: {term(), term()} | undefined  % NOT IMPLEMENTED
+}).
+```
+
+**Current Limitations:**
+- `scheduler_choice` field references `wf_sched:choice_entry()` but wf_sched module doesn't exist (wf_trace.erl:24)
+- `effect_result` field pending effect system implementation (item 010)
+- Replay execution is stubbed (wf_trace:from_replay_log/2 returns {error, invalid_replay_log} for non-empty logs)
+
+**Future Implementation:**
+When scheduler and effect system are complete, replay will:
+1. Record all nondeterministic choices during initial execution
+2. Store in replay_log via `wf_trace:to_replay_log/1` (wf_trace.erl:183-206)
+3. Replay by feeding choices via `wf_exec:run/3` with `replay(ChoiceLog)` scheduler policy
+
+## Common Test Integration
+
+### Running Common Test Suites
+
+While EUnit is the primary test framework, Common Test can be used for integration tests:
+
+```bash
+# Run all Common Test suites
+rebar3 ct
+
+# Run specific suite
+rebar3 ct --suite=wf_integration_tests
+
+# Run specific test case
+rebar3 ct --suite=wf_integration_tests --testcase=case_lifecycle
+```
+
+### Test Suite Structure
+
+Integration test suites should be placed in `test/` directory with `_SUITE.erl` suffix:
+
+```erlang
+-module(wf_integration_tests).
+-include_lib("common_test/include/ct.hrl").
+
+-export([all/0, groups/0]).
+-export([case_lifecycle/1, supervision_restart/1]).
+
+all() -> [case_lifecycle, supervision_restart].
+
+groups() -> [].
+
+%% Test case with Config
+case_lifecycle(Config) ->
+    %% Start supervisor
+    {ok, SupPid} = wf_substrate_sup:start_link(),
+    %% Create workflow case
+    Bytecode = wf_test_seq:mock_bytecode_seq_2_tasks(),
+    ExecState = wf_exec:new(Bytecode),
+    %% Execute
+    {done, _} = wf_exec:run(ExecState, 1000, undefined),
+    %% Cleanup
+    gen_server:stop(SupPid),
+    ok.
+```
+
+### Test Data Directory
+
+Place test data files in `test/data/` directory:
+
+```erlang
+load_bytecode_file(Config) ->
+    DataDir = ?config(data_dir, Config),
+    FilePath = filename:join(DataDir, "example_workflow.bc"),
+    {ok, Bytecode} = file:consult(FilePath),
+    %% Use Bytecode
+    ok.
+```
+
+Run with: `rebar3 ct --suite=wf_integration_tests --data_dir=test/data`
+
+## Operational Testing
+
+### Supervision Tree Testing
+
+Test supervision restart strategies by killing child processes:
+
+```erlang
+supervision_restart_test() ->
+    %% Start supervisor
+    {ok, SupPid} = wf_substrate_sup:start_link(),
+    %% TODO: Start child process (wf_case_sup not implemented)
+    %% ChildPid = wf_case_sup:start_case(Bytecode),
+    %% Kill child
+    %% exit(ChildPid, kill),
+    %% Verify restart
+    %% ?assertMatch([{_, ChildPid2, _, _}], supervisor:which_children(SupPid)),
+    %% ?assertNot(ChildPid =:= ChildPid2),
+    gen_server:stop(SupPid),
+    ok.
+```
+
+**Current Status:** Cannot test until item 012 (otp-supervision-tree) is complete (wf_substrate_sup.erl:46 has empty child specs).
+
+### Failure Scenario Testing
+
+Test failure modes and recovery:
+
+1. **Case Runner Crash**: Verify supervisor restart logic
+2. **Effect Timeout**: Test effect timeout handling (pending item 010)
+3. **State Corruption**: Run validation checks (wf_validate:check_soundness/1)
+4. **Cancellation Failure**: Verify cancellation propagates correctly (stubbed in item 008)
+
+### Chaos Testing
+
+Randomly terminate processes to verify system resilience:
+
+```erlang
+chaos_test() ->
+    %% Start workflow
+    ExecState = wf_exec:new(Bytecode),
+    %% Run partially
+    {running, State1} = wf_exec:step(ExecState, undefined),
+    %% Kill token (simulate process crash)
+    %% TODO: When token is separate process
+    %% Verify recovery or graceful failure
+    ok.
+```
+
+**Note:** Current executor is single-process (wf_exec.erl), so chaos testing requires multi-process implementation.
+
+## Coverage Report Interpretation
+
+### Generating Coverage
+
+```bash
+rebar3 cover
+```
+
+Report generated in: `_build/test/cover/index.html`
+
+### Coverage Goals
+
+- **Line Coverage**: > 80% for all core modules (wf_exec, wf_vm, wf_trace, wf_validate)
+- **Branch Coverage**: > 70% for all conditional logic
+- **Pattern Coverage**: All 16 implemented patterns (see docs/PATTERNS.md)
+
+### Interpreting Results
+
+**Good Coverage:**
+- wf_exec.erl: Should be > 90% (core opcode dispatch)
+- wf_vm.erl: Should be 100% (type definitions only)
+- wf_test_*.erl: Should be 60-80% (test helpers and property generators)
+
+**Expected Gaps:**
+- wf_exec.erl:512-529 (cancellation stubs, awaiting item 008)
+- wf_exec.erl:448-451 (TASK_EXEC is simple, may not hit all branches)
+- wf_validate.erl: Lines 431-526 (bounded exploration, hard to hit all paths)
+
+### Improving Coverage
+
+1. **Add Edge Case Tests**: Test N=0, N=1, large N (already done in wf_test_join.erl)
+2. **Property Testing**: Use wf_prop.erl to explore code paths (wf_test_term.erl)
+3. **Error Path Testing**: Test invalid bytecode, malformed opcodes (wf_validate_tests.erl)
+4. **Integration Tests**: Add end-to-end workflows (Common Test suites)
+
+## Manual Testing Procedures
+
+### Running Workflows Interactively
+
+```erlang
+%% Start Erlang shell
+erl -pa _build/default/lib/wf_substrate/ebin
+
+%% Compile and load
+c(wf_exec).
+c(wf_test_seq).
+
+%% Create workflow
+Bytecode = wf_test_seq:mock_bytecode_seq_2_tasks(),
+ExecState = wf_exec:new(Bytecode),
+
+%% Step through
+{running, State1} = wf_exec:step(ExecState, undefined),
+{running, State2} = wf_exec:step(State1, undefined),
+
+%% Run to completion
+{done, DoneState} = wf_exec:run(ExecState, 1000, undefined).
+
+%% Inspect state
+wf_exec:is_done(DoneState),
+wf_exec:get_step_count(DoneState).
+```
+
+### Debugging Failed Tests
+
+1. **Extract Failing Bytecode**: From property test failure
+   ```erlang
+   %% wf_prop:quickcheck/2 returns {error, Bytecode, Exception}
+   ```
+
+2. **Create Reproduction Case**: Add to appropriate test module
+   ```erlang
+   reproduction_test() ->
+       Bytecode = [...],  % Failing bytecode
+       ExecState = wf_exec:new(Bytecode),
+       ?assertMatch({done, _}, wf_exec:run(ExecState, 1000, undefined)).
+   ```
+
+3. **Enable Tracing**: Use wf_trace to see execution
+   ```erlang
+   {ok, TraceState} = wf_trace:new(full),
+   erlang:put(wf_trace_state, TraceState),
+   wf_exec:run(ExecState, 1000, undefined),
+   Events = wf_trace:get_events(TraceState),
+   ```
+
+4. **Inspect State**: Use wf_validate to check for issues
+   ```erlang
+   Report = wf_validate:validate_bytecode(Bytecode),
+   io:format("~p~n", [Report]).
+   ```
+
+### Load Testing
+
+Test performance under load:
+
+```erlang
+%% Spawn 1000 concurrent workflows
+load_test() ->
+    Bytecode = wf_test_par:mock_bytecode_par_3_branches(),
+    Parent = self(),
+    Pids = [spawn(fun() ->
+        ExecState = wf_exec:new(Bytecode),
+        wf_exec:run(ExecState, 1000, undefined),
+        Parent ! {self(), done}
+    end) || _ <- lists:seq(1, 1000)],
+    %% Wait for completion
+    [receive {Pid, done} -> ok end || Pid <- Pids],
+    io:format("All workflows completed~n").
+```
+
+**Note:** Current executor is single-process per workflow. For true parallelism, use Erlang processes to run multiple workflows concurrently.
+
+## Continuous Integration
+
+### CI Pipeline
+
+`.github/workflows/test.yml` (or equivalent):
+
+```yaml
+name: Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '26'
+      - run: rebar3 compile
+      - run: rebar3 eunit
+      - run: rebar3 cover
+      - run: rebar3 ct
+```
+
+### Test Execution Order
+
+1. **Compile**: `rebar3 compile`
+2. **Unit Tests**: `rebar3 eunit` (< 10 seconds target)
+3. **Coverage**: `rebar3 cover` (verify > 80%)
+4. **Integration Tests**: `rebar3 ct` (< 30 seconds target)
+5. **Benchmarks**: `wf_bench:run_all()` (verify performance regression)
+
+All tests must pass before merging PR.
+
+### Coverage Enforcement
+
+Add to `rebar.config`:
+
+```erlang
+{cover_opts, [verbose]}.
+{cover_enabled, true}.
+{cover_excl_mods, [wf_prop, wf_test_helpers]}.
+```
+
+Enforce in CI: Fail if coverage < 80% (using coveralls or similar).
