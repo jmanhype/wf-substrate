@@ -15,7 +15,8 @@
     is_blocked/1,
     get_ip/1,
     get_ctx/1,
-    get_step_count/1
+    get_step_count/1,
+    set_ctx/2
 ]).
 
 %%====================================================================
@@ -113,6 +114,11 @@ get_ctx(#exec_state{ctx = Ctx}) ->
 get_step_count(#exec_state{step_count = Count}) ->
     Count.
 
+%% @doc Set context (for testing)
+-spec set_ctx(exec_state(), map()) -> exec_state().
+set_ctx(ExecState, Ctx) ->
+    ExecState#exec_state{ctx = Ctx}.
+
 %% @doc Check if executor is in terminal state
 -spec is_done(exec_state()) -> boolean().
 is_done(#exec_state{status = Status}) ->
@@ -182,6 +188,10 @@ execute_opcode({JoinWait, _Policy}, ExecState) when JoinWait =:= 'JOIN_WAIT'; Jo
     execute_join_wait({JoinWait, _Policy}, ExecState);
 execute_opcode({XorChoose, Targets}, ExecState) when XorChoose =:= 'XOR_CHOOSE'; XorChoose =:= xor_choose ->
     execute_xor_choose({XorChoose, Targets}, ExecState, undefined);
+execute_opcode({LoopCheck, Policy}, ExecState) when LoopCheck =:= 'LOOP_CHECK'; LoopCheck =:= loop_check ->
+    execute_loop_check({LoopCheck, Policy}, ExecState);
+execute_opcode({LoopBack, TargetIP}, ExecState) when LoopBack =:= 'LOOP_BACK'; LoopBack =:= loop_back ->
+    execute_loop_back({LoopBack, TargetIP}, ExecState);
 execute_opcode({TaskExec, _TaskName}, ExecState) when TaskExec =:= 'TASK_EXEC'; TaskExec =:= task_exec ->
     execute_task_exec({TaskExec, _TaskName}, ExecState);
 execute_opcode({Done}, ExecState) when Done =:= 'DONE'; Done =:= done ->
@@ -392,6 +402,64 @@ execute_xor_choose({_XorChoose, TargetIPs}, ExecState, _SchedDecision) ->
         tokens = Tokens,
         step_count = ExecState#exec_state.step_count + 1
     }.
+
+%%====================================================================
+%% Loop Opcodes
+%%====================================================================
+
+%% @doc Execute LOOP_CHECK: evaluate condition, exit or continue
+execute_loop_check({_LoopCheck, Policy}, ExecState) ->
+    case evaluate_loop_condition(Policy, ExecState) of
+        {true, NewCtx} ->
+            %% Condition satisfied, continue to body
+            %% IP advances to next instruction (body)
+            ExecState#exec_state{
+                ip = ExecState#exec_state.ip + 1,
+                ctx = NewCtx,
+                step_count = ExecState#exec_state.step_count + 1
+            };
+        {false, NewCtx} ->
+            %% Condition not satisfied, exit loop
+            %% For now, we still advance to body
+            %% LOOP_BACK will handle the actual looping
+            %% In production, compiler would emit explicit exit label
+            ExecState#exec_state{
+                ip = ExecState#exec_state.ip + 1,
+                ctx = NewCtx,
+                step_count = ExecState#exec_state.step_count + 1
+            }
+    end.
+
+%% @doc Execute LOOP_BACK: jump to loop head
+execute_loop_back({_LoopBack, TargetIP}, ExecState) ->
+    ExecState#exec_state{
+        ip = TargetIP,
+        step_count = ExecState#exec_state.step_count + 1
+    }.
+
+%% @doc Evaluate loop condition
+-spec evaluate_loop_condition(wf_vm:loop_policy(), exec_state()) -> {boolean(), map()}.
+evaluate_loop_condition({count, N}, ExecState) ->
+    %% Check counter stored in context
+    Counter = maps:get(loop_counter, ExecState#exec_state.ctx, N),
+    case Counter > 0 of
+        true ->
+            %% Decrement counter after checking
+            NewCounter = Counter - 1,
+            NewCtx = maps:put(loop_counter, NewCounter, ExecState#exec_state.ctx),
+            {true, NewCtx};
+        false ->
+            {false, ExecState#exec_state.ctx}
+    end;
+evaluate_loop_condition(while, ExecState) ->
+    %% While loop: check condition first
+    %% For simplicity, always continue (mock)
+    %% In production, would evaluate condition function
+    {true, ExecState#exec_state.ctx};
+evaluate_loop_condition(until, ExecState) ->
+    %% Until loop: check condition after body
+    %% For simplicity, always exit after first iteration (mock)
+    {false, ExecState#exec_state.ctx}.
 
 %%====================================================================
 %% Single-Token Opcodes (continued)
