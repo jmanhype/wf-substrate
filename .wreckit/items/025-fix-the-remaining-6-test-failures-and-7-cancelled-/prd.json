@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "id": "025-fix-the-remaining-6-test-failures-and-7-cancelled-",
+  "branch_name": "wreckit/025-fix-the-remaining-6-test-failures-and-7-cancelled-",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Execute test suite and catalog all failures and cancellations",
+      "acceptance_criteria": [
+        "Full test suite executed with `rebar3 eunit -v` and output captured to /tmp/eunit_full_output.log",
+        "Failure count confirmed: Exactly 6 failures documented with module:line references",
+        "Cancellation count confirmed: Exactly 7 cancelled tests documented with module:line references",
+        "Failure catalog created at /tmp/failure_catalog.md with root cause analysis for each failure",
+        "Failures categorized by type: ETS initialization, state mutation, test assertion, timing-dependent, compilation errors",
+        "Each failing test module tested individually with `rebar3 eunit --module=[name]`",
+        "Specific test names and error messages extracted for all 6 failures",
+        "Cancellation reasons identified for all 7 cancelled tests",
+        "Before-state baseline captured in /tmp/eunit_baseline.log"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is the discovery phase. Must be completed before any fixes are applied. The failure catalog will guide the prioritization and order of fixes for subsequent user stories."
+    },
+    {
+      "id": "US-002",
+      "title": "Fix verify_scope_isolation validation logic",
+      "acceptance_criteria": [
+        "wf_cancel:verify_scope_isolation/2 function logic updated in src/wf_cancel.erl:357-367",
+        "Function now checks for active tokens INSIDE cancelled scope (not outside)",
+        "Returns ok when all tokens in cancelled scope have status=cancelled",
+        "Returns {error, {tokens_not_cancelled_in_scope, ActiveTokens}} when active tokens found in cancelled scope",
+        "Allows active tokens in other scopes (expected behavior)",
+        "Module compiles successfully with `rebar3 compile`",
+        "verify_scope_isolation test passes: `rebar3 eunit --module=wf_cancel_tests --test=verify_scope_isolation`",
+        "All wf_cancel_tests pass: `rebar3 eunit --module=wf_cancel_tests` shows 0 failures",
+        "Test passes consistently across 10 consecutive runs with no intermittent failures",
+        "Logic validated against test intent at test/wf_cancel_tests.erl:465-472"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is a production code fix, not a test fix. Ensure the logic is correct for the broader system, not just this test. The fix changes the validation semantics from 'no active tokens outside cancelled scope' to 'no active tokens inside cancelled scope'."
+    },
+    {
+      "id": "US-003",
+      "title": "Fix timing-dependent performance test thresholds",
+      "acceptance_criteria": [
+        "bench_complexity_isolation test threshold increased from 1000μs (1ms) to 10000μs (10ms) in test/wf_cancel_tests.erl:505",
+        "Test passes consistently across 20 consecutive runs with `for i in {1..20}; do rebar3 eunit --module=wf_cancel_tests --test=bench_complexity_isolation; done`",
+        "Typical execution time is < 5ms (well under 10ms threshold)",
+        "Other performance tests reviewed (bench_small_scope, bench_large_scope) and adjusted if needed",
+        "All benchmark tests pass with `rebar3 eunit --module=wf_cancel_tests`",
+        "No regressions in other wf_cancel_tests",
+        "Threshold provides 10x safety margin for CI environment variability while still validating O(n) complexity"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "If timing issues persist after increasing to 10ms, consider alternative approach: remove strict timing assertions and replace with complexity verification (e.g., measure and assert linear scaling with scope size, not absolute time)."
+    },
+    {
+      "id": "US-004",
+      "title": "Add setup/teardown to modules lacking gen_server initialization",
+      "acceptance_criteria": [
+        "All test modules that use wf_state:* functions identified and cataloged",
+        "Setup/cleanup functions added to identified modules following test/wf_state_tests.erl:8-19 pattern",
+        "Setup function checks `whereis(wf_state)` and starts gen_server if undefined",
+        "Cleanup function doesn't stop gen_server (lets it live for all tests)",
+        "Master test wrapper added following test/wf_cancel_tests.erl:511-548 pattern",
+        "Test generators converted from `test_name_test_()` to `test_name()` functions",
+        "Assertion style converted from `?_assert*` (generators) to `?assert*` (direct execution)",
+        "All converted modules compile successfully with `rebar3 compile`",
+        "Each fixed module passes individually: `rebar3 eunit --module=[module_name]`",
+        "No gen_server startup errors or 'already started' errors in test output",
+        "Only one wf_state process exists during test execution (not started multiple times)"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Add setup to modules incrementally (one or two at a time) and verify after each addition. Test modules that DON'T use gen_servers (pure function tests like some in wf_test_seq) don't need setup. Use grep to identify which modules actually call wf_state:* or other gen_server functions."
+    },
+    {
+      "id": "US-005",
+      "title": "Fix compilation errors causing cancelled tests",
+      "acceptance_criteria": [
+        "All 7 cancelled tests investigated and root cause identified",
+        "Missing include files added (-include directives for required .hrl files)",
+        "Undefined function errors fixed (correct function names and arities)",
+        "Module naming mismatches corrected (module name matches file name)",
+        "Syntax errors fixed (unterminated terms, missing commas)",
+        "Circular dependencies resolved if any",
+        "All test modules compile successfully with `rebar3 compile` (0 errors, 0 warnings)",
+        "Compilation log _build/test/lib/wf_substrate/erlc.log shows no errors",
+        "Cancelled test count reduced to 0 in `rebar3 eunit` output",
+        "Previously cancelled tests now appear in test output and execute",
+        "Total test count increases (previously cancelled tests now running)"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Common issues: missing -include_lib(\"eunit/include/eunit.hrl\"), missing wf_state.hrl, wf_exec.hrl, wf_cancel.hrl includes. Use grep to check what other working test files include. If a test is cancelled due to unimplemented functionality, note it but don't disable the test - it should pass once feature is complete."
+    },
+    {
+      "id": "US-006",
+      "title": "Final verification and full test suite validation",
+      "acceptance_criteria": [
+        "Clean build executed: `rebar3 clean && rebar3 compile` succeeds",
+        "Full test suite passes: `rebar3 eunit -v` shows 0 failures, 0 cancelled",
+        "Output captured to /tmp/eunit_final.log confirms all tests passed",
+        "All modified modules tested individually with `rebar3 eunit --module=[name]`",
+        "Test suite passes 5 consecutive times with `for i in {1..5}; do rebar3 eunit; done`",
+        "No intermittent or flaky tests (all 5 runs succeed)",
+        "CI validation successful: tests pass in simulated CI environment (Ubuntu, OTP 26)",
+        "Dialyzer passes: `rebar3 dialyzer` shows no new type errors",
+        "Fixes documented in /tmp/test_fixes_applied.md with before/after results",
+        "No tests disabled or removed from test suite",
+        "Code review confirms all fixes follow established patterns",
+        "Before-state: 6 failures, 7 cancelled. After-state: 0 failures, 0 cancelled"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is the final validation phase. Only mark complete when ALL acceptance criteria are met. If any failures remain, investigate and fix before completing. The goal is 100% test pass rate with no cancelled tests. Use docker to simulate CI environment if needed: `docker run --rm -v $(pwd):/workspace -w /workspace erlang:26 /bin/bash -c 'rebar3 compile && rebar3 eunit'"
+    }
+  ]
+}

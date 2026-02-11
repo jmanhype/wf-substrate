@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "025-fix-the-remaining-6-test-failures-and-7-cancelled-",
+  "title": "Fix the remaining 6 test failures and 7 cancelled tests in rebar3 eunit. The specific failures are:",
+  "state": "critique",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T20:24:09.596Z",
+  "updated_at": "2026-02-11T20:39:33.928Z"
+}

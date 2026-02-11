@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "026-1-wfcanceltestsverifyscopeisolation-line-472-asser",
+  "title": "1. wf_cancel_tests:verify_scope_isolation (line 472) - assertEqual failure",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T20:24:09.597Z",
+  "updated_at": "2026-02-11T20:24:09.597Z"
+}
