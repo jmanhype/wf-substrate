@@ -14,7 +14,7 @@
         "Types are exported and documented with -export_type attributes"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Foundational data structures for all governance features. Follows pattern from wf_validate #issue{} record. Must be defined before implementing governance modules."
     },
     {
@@ -36,7 +36,7 @@
         "All API functions have -spec type specifications"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Core policy storage and management. Uses ETS table pattern from wf_trace.erl:82-93. Must be running before any enforcement can work."
     },
     {
@@ -58,7 +58,7 @@
         "All mutations are atomic via gen_server serialization"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Budget tracking with O(1) checks. Limits checked before effect execution. Critical for resource isolation in multi-tenant environments."
     },
     {
@@ -77,7 +77,7 @@
         "All functions have -spec type specifications"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Stub module provides governance integration point for item 010. Must match planned wf_effect interface. Real implementation will replace stub when item 010 completes."
     },
     {
@@ -91,7 +91,7 @@
         "Token record documentation updated with new status"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Token status extension needed for approval gate support. Line 33 in wf_exec.erl must add blocked_approval to status type."
     },
     {
@@ -104,7 +104,7 @@
         "Existing tests pass with new opcode"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "New opcode for approval yielding in bytecode. Follows pattern from existing opcodes like CANCEL_SCOPE."
     },
     {
@@ -125,7 +125,7 @@
         "All API functions have -spec type specifications"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Approval gate system blocks execution until external approval. Timeout with configurable actions ensures operations don't block indefinitely. Critical for human-in-the-loop workflows."
     },
     {
@@ -142,7 +142,7 @@
         "TODO comments added for wf_cancel integration"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Timeout enforcement at three levels (case/task/effect). Produces structured errors for audit trail. Will integrate with wf_cancel for actual cancellation when item 008 completes."
     },
     {
@@ -157,7 +157,7 @@
         "Server shutdown order is correct (dependencies start first)"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Supervision ensures fault tolerance. If any server crashes, supervisor restarts it. Critical for production reliability."
     },
     {
@@ -189,7 +189,7 @@
         "Test coverage exceeds 80%"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Comprehensive test coverage ensures correctness. Unit tests should cover all code paths including error conditions."
     },
     {
@@ -207,7 +207,7 @@
         "All integration tests pass"
       ],
       "priority": 4,
-      "status": "pending",
+      "status": "done",
       "notes": "Integration tests verify modules work together correctly. Tests should use real wf_exec executor with governance checks enabled."
     },
     {
@@ -224,7 +224,7 @@
         "No counterexamples found for any property"
       ],
       "priority": 4,
-      "status": "pending",
+      "status": "done",
       "notes": "Property-based tests find edge cases and verify invariants. Critical for correctness of budget accounting which handles concurrent access."
     },
     {
@@ -243,7 +243,7 @@
         "Documentation builds with rebar3 edoc"
       ],
       "priority": 4,
-      "status": "pending",
+      "status": "done",
       "notes": "Documentation enables users to adopt governance features. Should include examples and best practices. Must clearly mark stub integration points."
     },
     {
@@ -259,7 +259,7 @@
         "Benchmark code compiles and runs"
       ],
       "priority": 4,
-      "status": "pending",
+      "status": "done",
       "notes": "Performance tests verify governance overhead is acceptable. Budget and allowlist checks are on hot path and must be fast (< 100us)."
     }
   ]
