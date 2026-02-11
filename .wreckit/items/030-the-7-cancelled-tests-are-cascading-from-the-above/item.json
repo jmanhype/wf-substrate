@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "030-the-7-cancelled-tests-are-cascading-from-the-above",
+  "title": "The 7 cancelled tests are cascading from the above failures. Fix the actual assertion logic or the underlying module behavior so all tests pass. Do NOT delete or disable any test. Target: rebar3 eunit shows 0 failures, 0 cancelled.",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T20:24:09.598Z",
+  "updated_at": "2026-02-11T20:24:09.598Z"
+}

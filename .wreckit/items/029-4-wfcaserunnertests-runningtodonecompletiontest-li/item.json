@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "029-4-wfcaserunnertests-runningtodonecompletiontest-li",
+  "title": "4. wf_case_runner_tests running_to_done_completion_test (line 36) - gen_statem crash",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T20:24:09.598Z",
+  "updated_at": "2026-02-11T20:24:09.598Z"
+}

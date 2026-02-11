@@ -352,18 +352,24 @@ propagate(ScopeId, TokensMap) ->
 %% Invariant Verification (for testing)
 %%====================================================================
 
-%% @doc Verify scope isolation: unrelated scopes unaffected
+%% @doc Verify scope isolation: all tokens in cancelled scope are cancelled
+%% Active tokens in other scopes are allowed and expected.
 -spec verify_scope_isolation(wf_state:state(), scope_id()) -> ok | {error, term()}.
 verify_scope_isolation(State, CancelledScopeId) ->
     Tokens = wf_state:get_tokens(State),
-    ActiveTokensOutsideScope = [
+    %% Verify: All tokens IN cancelled scope are cancelled
+    %% Tokens in other scopes can be active (this is expected)
+    TokensInCancelledScope = [
         {TId, T} || {TId, T} <- maps:to_list(Tokens),
-        T#token.scope_id =/= CancelledScopeId,
+        T#token.scope_id =:= CancelledScopeId
+    ],
+    ActiveTokensInScope = [
+        {TId, T} || {TId, T} <- TokensInCancelledScope,
         T#token.status =:= active
     ],
-    case ActiveTokensOutsideScope of
+    case ActiveTokensInScope of
         [] -> ok;
-        _ -> {error, {tokens_corrupted, ActiveTokensOutsideScope}}
+        _ -> {error, {tokens_not_cancelled_in_scope, ActiveTokensInScope}}
     end.
 
 %% @doc Verify scope nesting: child scopes cancelled when parent cancelled

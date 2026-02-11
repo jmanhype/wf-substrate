@@ -102,14 +102,19 @@ from_log(ChoiceLog) when is_list(ChoiceLog) ->
     #{log => ChoiceLog, position => 1, policy => replay}.
 
 %% @doc Legacy API for backward compatibility
--spec select_action(exec_state(), sched_policy()) -> sched_decision().
-select_action(_ExecState, Policy) ->
-    case Policy of
+%% Accepts both sched_policy() atom and sched_state() map
+-spec select_action(exec_state(), sched_policy() | sched_state()) -> sched_decision().
+select_action(_ExecState, PolicyOrState) when is_atom(PolicyOrState) ->
+    case PolicyOrState of
         deterministic -> {token, mock_token};
         nondeterministic -> {token, mock_token};
         {replay, _} -> {token, replay_token};
         undefined -> {token, mock_token}
-    end.
+    end;
+select_action(ExecState, SchedState) when is_map(SchedState) ->
+    %% Extract policy from sched state map
+    Policy = maps:get(policy, SchedState, deterministic),
+    select_action(ExecState, Policy).
 
 %%====================================================================
 %% Internal Functions
