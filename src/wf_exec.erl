@@ -11,6 +11,7 @@
     new/1,
     step/2,
     run/3,
+    resume/2,
     is_done/1,
     is_blocked/1,
     get_ip/1,
@@ -139,30 +140,45 @@ is_blocked(#exec_state{status = Status}) ->
 
 %% @doc Execute single reduction step
 -spec step(exec_state(), term()) -> {exec_state(), map()}.
-step(ExecState, _SchedDecision) ->
+step(ExecState, SchedDecision) ->
     Opcode = fetch_opcode(ExecState),
-    NewExecState = execute_opcode(Opcode, ExecState),
+    NewExecState = execute_opcode(Opcode, ExecState, SchedDecision),
     TraceEvent = #{opcode => Opcode, step_count => NewExecState#exec_state.step_count},
     {NewExecState, TraceEvent}.
 
 %% @doc Execute N quanta, yield when exhausted or terminal
 -spec run(exec_state(), pos_integer(), term()) ->
-    {done, exec_state()} | {yield, exec_state()}.
-run(ExecState0, Quanta, _SchedPolicy) ->
-    run_loop(ExecState0, Quanta, 0).
+    {done, exec_state()} | {effect, term(), exec_state()} | {yield, exec_state()}.
+run(ExecState0, Quanta, SchedPolicy) ->
+    run_loop(ExecState0, Quanta, SchedPolicy, 0).
 
-run_loop(ExecState, Quanta, Count) when Count >= Quanta ->
+run_loop(ExecState, Quanta, _SchedPolicy, Count) when Count >= Quanta ->
     %% Quanta exhausted, yield
     {yield, ExecState};
 
-run_loop(ExecState, _Quanta, _Count) when ExecState#exec_state.status =:= done ->
+run_loop(ExecState, _Quanta, _SchedPolicy, _Count) when ExecState#exec_state.status =:= done;
+                                                           ExecState#exec_state.status =:= failed;
+                                                           ExecState#exec_state.status =:= cancelled ->
     %% Terminal state
     {done, ExecState};
 
-run_loop(ExecState0, Quanta, Count) ->
-    %% Execute one step (no scheduler integration yet)
-    {ExecState1, _TraceEvent} = step(ExecState0, undefined),
-    run_loop(ExecState1, Quanta, Count + 1).
+run_loop(ExecState0, Quanta, SchedPolicy, Count) ->
+    %% Select next action via scheduler
+    SchedDecision = wf_sched:select_action(ExecState0, SchedPolicy),
+
+    %% Execute one step with scheduler decision
+    {ExecState1, _TraceEvent} = step(ExecState0, SchedDecision),
+
+    %% Check for effect yield
+    case ExecState1#exec_state.status of
+        blocked_effect ->
+            %% Task yielded effect
+            EffectSpec = {mock_effect, ExecState1#exec_state.ip},
+            {effect, EffectSpec, ExecState1};
+        _ ->
+            %% Continue execution
+            run_loop(ExecState1, Quanta, SchedPolicy, Count + 1)
+    end.
 
 %%====================================================================
 %% Internal Functions
@@ -183,28 +199,28 @@ fetch_opcode(#exec_state{ip = IP, bytecode = Bytecode}) ->
 %%====================================================================
 
 %% @doc Execute opcode and update exec_state
--spec execute_opcode(wf_vm:opcode(), exec_state()) -> exec_state().
-execute_opcode({SeqEnter, _Arg}, ExecState) when SeqEnter =:= 'SEQ_ENTER'; SeqEnter =:= seq_enter ->
+-spec execute_opcode(wf_vm:opcode(), exec_state(), term()) -> exec_state().
+execute_opcode({SeqEnter, _Arg}, ExecState, _SchedDecision) when SeqEnter =:= 'SEQ_ENTER'; SeqEnter =:= seq_enter ->
     execute_seq_enter({SeqEnter, _Arg}, ExecState);
-execute_opcode({SeqNext, TargetIP}, ExecState) when SeqNext =:= 'SEQ_NEXT'; SeqNext =:= seq_next ->
+execute_opcode({SeqNext, TargetIP}, ExecState, _SchedDecision) when SeqNext =:= 'SEQ_NEXT'; SeqNext =:= seq_next ->
     execute_seq_next({SeqNext, TargetIP}, ExecState);
-execute_opcode({ParFork, Targets}, ExecState) when ParFork =:= 'PAR_FORK'; ParFork =:= par_fork ->
+execute_opcode({ParFork, Targets}, ExecState, _SchedDecision) when ParFork =:= 'PAR_FORK'; ParFork =:= par_fork ->
     execute_par_fork({ParFork, Targets}, ExecState);
-execute_opcode({JoinWait, _Policy}, ExecState) when JoinWait =:= 'JOIN_WAIT'; JoinWait =:= join_wait ->
+execute_opcode({JoinWait, _Policy}, ExecState, _SchedDecision) when JoinWait =:= 'JOIN_WAIT'; JoinWait =:= join_wait ->
     execute_join_wait({JoinWait, _Policy}, ExecState);
-execute_opcode({XorChoose, Targets}, ExecState) when XorChoose =:= 'XOR_CHOOSE'; XorChoose =:= xor_choose ->
-    execute_xor_choose({XorChoose, Targets}, ExecState, undefined);
-execute_opcode({LoopCheck, Policy}, ExecState) when LoopCheck =:= 'LOOP_CHECK'; LoopCheck =:= loop_check ->
+execute_opcode({XorChoose, Targets}, ExecState, SchedDecision) when XorChoose =:= 'XOR_CHOOSE'; XorChoose =:= xor_choose ->
+    execute_xor_choose({XorChoose, Targets}, ExecState, SchedDecision);
+execute_opcode({LoopCheck, Policy}, ExecState, _SchedDecision) when LoopCheck =:= 'LOOP_CHECK'; LoopCheck =:= loop_check ->
     execute_loop_check({LoopCheck, Policy}, ExecState);
-execute_opcode({LoopBack, TargetIP}, ExecState) when LoopBack =:= 'LOOP_BACK'; LoopBack =:= loop_back ->
+execute_opcode({LoopBack, TargetIP}, ExecState, _SchedDecision) when LoopBack =:= 'LOOP_BACK'; LoopBack =:= loop_back ->
     execute_loop_back({LoopBack, TargetIP}, ExecState);
-execute_opcode({CancelScope, ScopeOp}, ExecState) when CancelScope =:= 'CANCEL_SCOPE'; CancelScope =:= cancel_scope ->
+execute_opcode({CancelScope, ScopeOp}, ExecState, _SchedDecision) when CancelScope =:= 'CANCEL_SCOPE'; CancelScope =:= cancel_scope ->
     execute_cancel_scope({CancelScope, ScopeOp}, ExecState);
-execute_opcode({TaskExec, _TaskName}, ExecState) when TaskExec =:= 'TASK_EXEC'; TaskExec =:= task_exec ->
+execute_opcode({TaskExec, _TaskName}, ExecState, _SchedDecision) when TaskExec =:= 'TASK_EXEC'; TaskExec =:= task_exec ->
     execute_task_exec({TaskExec, _TaskName}, ExecState);
-execute_opcode({Done}, ExecState) when Done =:= 'DONE'; Done =:= done ->
+execute_opcode({Done}, ExecState, _SchedDecision) when Done =:= 'DONE'; Done =:= done ->
     execute_done(ExecState);
-execute_opcode(_Opcode, _ExecState) ->
+execute_opcode(_Opcode, _ExecState, _SchedDecision) ->
     error({unimplemented_opcode, _Opcode}).
 
 %%====================================================================
@@ -228,15 +244,43 @@ execute_seq_next({_SeqNext, TargetIP}, ExecState) ->
         step_count = ExecState#exec_state.step_count + 1
     }.
 
-%% @doc Execute TASK_EXEC: run task function (mock for now)
+%% @doc Execute TASK_EXEC: run task function, detect effect yield
 execute_task_exec({_TaskExec, _TaskName}, ExecState) ->
-    %% Mock: task always succeeds, updates context
-    NewCtx = maps:put(task_result, ok, ExecState#exec_state.ctx),
-    ExecState#exec_state{
-        ctx = NewCtx,
-        ip = ExecState#exec_state.ip + 1,
-        step_count = ExecState#exec_state.step_count + 1
-    }.
+    %% Mock: look up task function and execute it
+    TaskFun = lookup_task_function(_TaskName, ExecState),
+    Ctx = ExecState#exec_state.ctx,
+
+    case TaskFun(Ctx) of
+        {ok, NewCtx} ->
+            %% Pure task completed successfully
+            ExecState#exec_state{
+                ctx = NewCtx,
+                ip = ExecState#exec_state.ip + 1,
+                step_count = ExecState#exec_state.step_count + 1
+            };
+        {effect, EffectSpec, ContCtx} ->
+            %% Task yielded effect
+            %% Store effect spec in exec_state for later retrieval
+            _ = EffectSpec,  %% Suppress unused warning
+            ExecState#exec_state{
+                ctx = ContCtx,
+                status = blocked_effect,
+                ip = ExecState#exec_state.ip,  %% Don't advance IP
+                step_count = ExecState#exec_state.step_count + 1
+            };
+        {error, Reason} ->
+            %% Task failed
+            CurrentToken = ExecState#exec_state.current_token,
+            Token = maps:get(CurrentToken, ExecState#exec_state.tokens),
+            UpdatedToken = Token#token{status = failed, value = {error, Reason}},
+            Tokens = maps:put(CurrentToken, UpdatedToken, ExecState#exec_state.tokens),
+
+            ExecState#exec_state{
+                tokens = Tokens,
+                status = failed,
+                step_count = ExecState#exec_state.step_count + 1
+            }
+    end.
 
 %% @doc Get current scope from scope_stack
 -spec get_current_scope(exec_state()) -> term().
@@ -594,4 +638,28 @@ increment_join_counter(BranchId, ExecState, ResultValue) ->
         results = [ResultValue | JoinCounter#join_counter.results]
     },
     maps:put(JoinId, UpdatedJoinCounter, ExecState#exec_state.join_counters).
+
+%% @doc Look up task function (mock for now)
+-spec lookup_task_function(atom(), exec_state()) -> fun((map()) -> {ok, map()} | {effect, term(), map()} | {error, term()}).
+lookup_task_function(_TaskName, _ExecState) ->
+    %% Mock: task always succeeds with ok result
+    %% In production, would look up from bytecode metadata
+    fun(Ctx) -> {ok, maps:put(task_result, ok, Ctx)} end.
+
+%%====================================================================
+%% Effect Resume
+%%====================================================================
+
+%% @doc Resume execution after effect result
+-spec resume(exec_state(), term()) -> exec_state().
+resume(ExecState, EffectResult) ->
+    %% Update context with effect result
+    NewCtx = maps:put(effect_result, EffectResult, ExecState#exec_state.ctx),
+
+    %% Clear blocked status, advance IP
+    ExecState#exec_state{
+        ctx = NewCtx,
+        status = running,
+        ip = ExecState#exec_state.ip + 1
+    }.
 

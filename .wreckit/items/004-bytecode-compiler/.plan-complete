@@ -1,0 +1,34 @@
+# Implementation Plan Complete
+
+This plan and PRD have been created for item 004-bytecode-compiler.
+
+## Key Decisions Made:
+
+1. **Dependency on item 002**: Compiler cannot be implemented until wf_term.erl exists. Plan assumes item 002 is completed first. If not, wf_vm.erl types can be created independently to unblock development.
+
+2. **Label generation**: Using `erlang:make_ref()` for simplicity and safety. Avoids state threading required by counter-based approach.
+
+3. **Defer compilation**: Omitting in v1. Defer opcode not in item.json spec. Returning {error, {not_implemented, defer}}.
+
+4. **EFFECT_YIELD opcode**: Not emitted by compiler. Executor handles effect yield detection at runtime.
+
+5. **CANCEL_SCOPE format**: Two-opcode format {CANCEL_SCOPE, {enter, ScopeId}} and {CANCEL_SCOPE, {exit, ScopeId}} for clarity.
+
+6. **Error handling**: Hybrid approach - throw badarg for contract violations, return {error, Reason} for structural issues.
+
+7. **Two-pass compilation**: Emit labels (pass 1), resolve to IPs (pass 2). Simpler than single-pass with backpatching.
+
+8. **wf_vm.erl separate**: Define bytecode types in dedicated module (wf_vm) for separation of concerns.
+
+## Files Created:
+
+- `/Users/speed/wf-substrate/.wreckit/items/004-bytecode-compiler/plan.md`
+- PRD saved to wreckit system with 11 user stories
+
+## Next Steps:
+
+1. Ensure item 002 (wf_term) is completed
+2. Create branch `wreckit/004-bytecode-compiler`
+3. Implement phases 1-8 sequentially
+4. Test thoroughly at each phase
+5. Merge to main when complete

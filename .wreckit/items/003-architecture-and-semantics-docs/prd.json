@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "id": "003-architecture-and-semantics-docs",
+  "branch_name": "wreckit/003-architecture-and-semantics-docs",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Create ARCHITECTURE.md with system architecture documentation",
+      "acceptance_criteria": [
+        "File exists at /Users/speed/wf-substrate/docs/ARCHITECTURE.md",
+        "Contains module dependency graph showing all 16 planned modules",
+        "Contains runtime strategy choice section explaining bytecode VM vs AST interpretation",
+        "Contains compilation pipeline section with concrete example",
+        "Contains supervision tree layout section with ASCII diagram",
+        "Contains effect boundary model section with EffectSpec and Receipt structures",
+        "Contains type system overview referencing item 002 types",
+        "Contains module responsibilities section covering all 16 modules",
+        "File is valid Markdown with no syntax errors",
+        "All content aligns with PROMPT.md specification",
+        "Uses 'will' and 'shall' language for future implementation"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "This is the foundational architecture document that will guide all subsequent implementation work (items 004-020). Must be based entirely on PROMPT.md and item overviews since no implementation exists yet."
+    },
+    {
+      "id": "US-002",
+      "title": "Write module dependency graph and explain bytecode VM rationale",
+      "acceptance_criteria": [
+        "Module dependency graph shows wf_term as foundation",
+        "Graph shows wf_compile and wf_vm as intermediate layers",
+        "Graph shows wf_exec as central consumer",
+        "Graph shows cross-cutting concerns (wf_state, wf_sched, wf_cancel, wf_effect, wf_trace)",
+        "Bytecode VM rationale section explains O(1) vs O(depth) dispatch",
+        "Explains why per-step 'case NodeType of' is avoided",
+        "Explains explicit exec_state structure (IP, branch map, join counters, scope stack)",
+        "Compares bytecode VM to continuation network alternative",
+        "Includes comparison table of dispatch complexity",
+        "Documents compilation overhead vs runtime performance tradeoff"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "This section is critical for understanding the design decision to use bytecode VM. Must clearly articulate the performance and observability benefits."
+    },
+    {
+      "id": "US-003",
+      "title": "Document compilation pipeline with concrete example",
+      "acceptance_criteria": [
+        "Shows flow: term → validate → compile → bytecode → execute",
+        "Provides ASCII flowchart of pipeline stages",
+        "Details each stage (term format, validation checks, compilation process, bytecode format, execution)",
+        "Includes concrete compilation example (seq(par([task(a), task(b)]), task(c)))",
+        "Shows source term → bytecode mapping",
+        "Explains single-pass recursive compilation",
+        "Explains label resolution to integer addresses",
+        "References item 004 (bytecode compiler) for implementation"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "The concrete example is essential for making the compilation process understandable. Should show actual opcodes and IP addresses."
+    },
+    {
+      "id": "US-004",
+      "title": "Document supervision tree layout and per-case runner design",
+      "acceptance_criteria": [
+        "Includes ASCII diagram of supervision hierarchy",
+        "Shows wf_substrate_sup → wf_case_sup → per-case runners",
+        "Shows optional wf_effect_sup and wf_trace_sink",
+        "Documents per-case runner states (initializing, running, waiting_effect, waiting_signal, cancelled, done)",
+        "Documents per-case runner data (exec_state, step_quanta, trace_level)",
+        "Documents per-case runner messages (signals, effect results, cancel requests)",
+        "Explains restart strategies and fault tolerance",
+        "References item 012 (OTP supervision tree) for implementation"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "The supervision tree is the foundation for OTP integration. Must be clear enough for implementers to build the gen_statem behavior."
+    },
+    {
+      "id": "US-005",
+      "title": "Document effect boundary model with EffectSpec and Receipt structures",
+      "acceptance_criteria": [
+        "Explains problem: pure substrate vs impure world",
+        "Shows effect boundary pattern (task returns {effect, Spec, ContCtx})",
+        "Documents EffectSpec structure (effect_id, effect_type, payload, idempotency_key, timeout)",
+        "Documents Receipt structure (receipt_id, effect_id, effect_spec_hash, timestamp, result, duration_us)",
+        "Shows effect lifecycle flowchart (Task → EffectSpec → Execute → Resume → Receipt)",
+        "Explains cancellation of in-flight effects",
+        "Explains idempotency and at-most-once semantics",
+        "References item 010 (effect boundary) for implementation"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "The effect boundary is a critical design pattern. Must clearly distinguish between wrong approach (direct side effects) and correct approach (yielding effects)."
+    },
+    {
+      "id": "US-006",
+      "title": "Create SEMANTICS.md with formal operational semantics",
+      "acceptance_criteria": [
+        "File exists at /Users/speed/wf-substrate/docs/SEMANTICS.md",
+        "Contains execution state definition (σ = (ctx, tokens, scopes, ip, branch_map, join_counters, step_count))",
+        "Explains inference rule notation (premise/conclusion format)",
+        "Contains reduction rules for all 9 kernel primitives",
+        "Contains structural rules for context, scope, branch, and token invariants",
+        "Contains examples section with step-by-step execution traces",
+        "File is valid Markdown with no syntax errors",
+        "All content aligns with PROMPT.md semantics description",
+        "All inference rules use consistent ASCII notation",
+        "No implementation-specific details (only semantic specification)"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "This document provides the mathematical foundation for execution. Must be precise and unambiguous to guide executor implementation."
+    },
+    {
+      "id": "US-007",
+      "title": "Write reduction rules for task execution, seq, par, and xor primitives",
+      "acceptance_criteria": [
+        "Task execution has rules for TASK-EXEC (pure task), TASK-EFFECT (effect-yielding), TASK-ERROR (failure)",
+        "Sequential composition (seq) has rules for SEQ-ENTER, SEQ-NEXT, SEQ-DONE",
+        "Parallel fork (par) has rules for PAR-FORK (spawn N branches) and PAR-COMPLETE (branch completion)",
+        "Exclusive choice (xor) has rule for XOR-CHOOSE (select one branch, disable others)",
+        "Each rule has clear preconditions and postconditions",
+        "Each rule specifies state transformation",
+        "Rules align with PROMPT.md:110-113 primitive definitions"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "These are the four most fundamental control flow primitives. Their rules must be absolutely correct as they form the foundation for more complex patterns."
+    },
+    {
+      "id": "US-008",
+      "title": "Write reduction rules for join synchronization policies",
+      "acceptance_criteria": [
+        "JOIN-ALL rule: wait for all branches to complete",
+        "JOIN-FIRST-N rule: wait for N branches, cancel remainder",
+        "JOIN-FIRST-COMPLETE rule: wait for first branch, cancel all others",
+        "JOIN-N-OF-M rule: wait for N out of M branches",
+        "Each rule explains join counter manipulation",
+        "Each rule explains cancellation of unselected branches",
+        "Each rule specifies result collection",
+        "Policies align with PROMPT.md:114 and item 004 opcode list"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Join policies are subtle and error-prone. Must clearly distinguish between all, first_n, n_of_m, sync_merge, and first_complete semantics."
+    },
+    {
+      "id": "US-009",
+      "title": "Write reduction rules for loop, defer, cancel, and mi primitives",
+      "acceptance_criteria": [
+        "Loop has rules for LOOP-WHILE (check condition, execute body or exit)",
+        "Loop has rules for LOOP-UNTIL (execute body, check condition, repeat or exit)",
+        "Loop has rules for LOOP-COUNT (decrement counter, execute body or exit)",
+        "Defer has rules for DEFER-WAIT (all branches pending) and DEFER-SELECT (external event selects branch)",
+        "Cancel has rules for CANCEL-ENTER (push scope), CANCEL-PROPAGATE (mark tokens cancelled), CANCEL-EXIT (pop scope)",
+        "Multiple instances has rules for MI-SPAWN-FIXED, MI-SPAWN-DYNAMIC, MI-COLLECT, MI-JOIN",
+        "All rules align with PROMPT.md:115-118 primitive definitions"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "These are the more complex primitives. Cancel propagation must specify O(scope size) complexity. MI join policies must reference join policy rules."
+    },
+    {
+      "id": "US-010",
+      "title": "Write structural rules and execution examples",
+      "acceptance_criteria": [
+        "Context rule: context flows unchanged unless explicitly modified",
+        "Scope rule: cancel scopes nest properly, never cross",
+        "Branch rule: parallel branches are isolated with independent tokens",
+        "Token rule: tokens created on fork/choice, destroyed on join/error",
+        "Determinism rule: same term + same ctx → same trace under deterministic scheduler",
+        "Examples section contains sequence example (seq(task(a), task(b)))",
+        "Examples section contains parallel example (par([task(a), task(b)]))",
+        "Examples section contains loop example (loop({count, 3}, task(a)))",
+        "Each example shows step-by-step trace with state evolution"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Structural rules define invariants that the executor must maintain. Examples are essential for making the formal semantics accessible and understandable."
+    }
+  ]
+}

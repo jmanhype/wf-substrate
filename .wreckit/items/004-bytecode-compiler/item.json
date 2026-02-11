@@ -2,12 +2,12 @@
   "schema_version": 1,
   "id": "004-bytecode-compiler",
   "title": "Implement bytecode compiler",
-  "state": "idea",
+  "state": "researched",
   "overview": "Implement wf_compile.erl: compile wf_term() AST into wf_bc() bytecode (flat instruction list). Opcodes: SEQ_ENTER (begin sequence scope), SEQ_NEXT (advance to next step in sequence), PAR_FORK (fork N parallel branches with label targets), JOIN_WAIT (block until join condition met — policy: all/n/first), XOR_CHOOSE (exclusive choice point with branch labels), LOOP_BACK (jump back to loop head), LOOP_CHECK (evaluate loop condition, exit or continue), CANCEL_SCOPE (enter/exit cancel region with scope ID), MI_SPAWN (spawn multiple instances per config), EFFECT_YIELD (yield control for external effect), TASK_EXEC (execute a task — the leaf operation), DONE (terminate execution path).\n\nOutput is a flat list of {opcode, operands} tuples with integer label targets for jumps/forks. The compiler performs a single recursive pass over the AST, emitting instructions and resolving labels. Include -spec for compile/1 :: wf_term() -> wf_bc(). Validate that compiled output has no unresolved labels. No per-step AST dispatch at runtime — all structural decisions are resolved at compile time.",
   "branch": null,
   "pr_url": null,
   "pr_number": null,
-  "last_error": null,
+  "last_error": "Plan phase detected unauthorized file modifications:\n\n  Untracked .wreckit/items/004-bytecode-compiler/.plan-complete\n\nThe plan phase must be design-only. Only plan.md and prd.json may be created.\nAny code changes should be made during the implementation phase.",
   "created_at": "2026-02-10T00:00:00.000Z",
-  "updated_at": "2026-02-10T00:00:00.000Z"
+  "updated_at": "2026-02-11T12:24:12.464Z"
 }

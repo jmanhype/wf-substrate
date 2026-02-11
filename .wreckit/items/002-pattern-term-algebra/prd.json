@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "id": "002-pattern-term-algebra",
+  "branch_name": "wreckit/002-pattern-term-algebra",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Define kernel type system for pattern algebra",
+      "acceptance_criteria": [
+        "wf_term.erl module exists and compiles",
+        "All kernel types defined: ctx(), scope_id(), case_id(), receipt(), task_fun(), task_metadata(), join_policy(), loop_policy(), mi_policy(), cancel_scope(), cancel_option()",
+        "wf_term() union type defined as tagged tuples for 9 constructors: task, seq, par, xor, join, loop, defer, cancel, mi",
+        "validation_error() type defined for structured error reporting",
+        "All types exported with -export_type attribute",
+        "Module documentation explains transparency decision and design rationale",
+        "rebar3 compile succeeds with zero warnings",
+        "Dialyzer passes with no type errors"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "This is the foundation for all subsequent work. Types must be defined before any constructors can be implemented. Decision: Use -type (transparent) not -opaque for flexibility in testing and compilation."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement raw constructors for kernel primitives",
+      "acceptance_criteria": [
+        "All 9 raw constructors implemented: _task/2, _seq/2, _par/1, _xor/1, _join/2, _loop/2, _defer/1, _cancel/2, _mi/2",
+        "Each raw constructor creates correct tagged tuple structure",
+        "All raw constructors have complete -spec declarations",
+        "Raw constructors prefixed with underscore to indicate internal use",
+        "Raw constructors perform NO validation (fast path)",
+        "Module documentation indicates raw constructors are for internal use only",
+        "rebar3 compile succeeds",
+        "Dialyzer passes"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Raw constructors are simple tuple creation with no validation. They will be used internally by derived patterns and compiler (item 004)."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement smart constructors with validation",
+      "acceptance_criteria": [
+        "All 9 smart constructors implemented: task/2, seq/2, par/1, xor/1, join/2, loop/2, defer/1, cancel/2, mi/2",
+        "task/2 validates Name is atom and Metadata is map with required 'function' key",
+        "par/1 validates list length >= 2",
+        "xor/1 validates list length >= 2",
+        "join/2 validates list length >= 2 and policy is valid join_policy()",
+        "loop/2 validates policy is valid loop_policy()",
+        "defer/1 validates list length >= 2",
+        "mi/2 validates policy is valid mi_policy()",
+        "All smart constructors throw badarg with descriptive error messages for invalid inputs",
+        "All smart constructors have complete -spec declarations and -doc comments",
+        "Helper functions validate policy formats: validate_join_policy_format/1, validate_loop_policy_format/1, validate_mi_policy_format/1",
+        "rebar3 compile succeeds",
+        "Dialyzer passes"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Smart constructors are the public API. They must validate all invariants and throw descriptive errors. Use guards for type checks."
+    },
+    {
+      "id": "US-004",
+      "title": "Implement structural validation (well_formed/1)",
+      "acceptance_criteria": [
+        "well_formed/1 function implemented with spec: -spec well_formed(wf_term()) -> ok | {error, [validation_error()]}",
+        "Validates branch count invariants: par, xor, defer require >= 2 branches",
+        "Validates join policy format",
+        "Validates loop policy format",
+        "Validates MI policy format",
+        "Validates cancel scope nesting (tracks scope stack)",
+        "Validates task metadata has required 'function' key",
+        "Returns ok for valid terms",
+        "Returns {error, Errors} for invalid terms with detailed error list",
+        "Helper functions: validate_node/2, validate_list/2, validate_cancel_scope_format/1, validate_cancel_options/1",
+        "Recursive traversal handles nested structures",
+        "Error list is deduplicated using lists:usort/1",
+        "Module documentation clarifies validation scope (local invariants only, global checks in item 013)",
+        "rebar3 compile succeeds",
+        "Dialyzer passes"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Validation checks ONLY local structural invariants (branch counts, type formats, scope nesting). Global properties (deadlock, soundness) will be checked by wf_validate in item 013 using bounded model checking."
+    },
+    {
+      "id": "US-005",
+      "title": "Implement wf_core derived patterns",
+      "acceptance_criteria": [
+        "wf_core.erl module exists and compiles",
+        "simple_merge/2 implemented: Takes [wf_term()] alternatives and wf_term() continuation, returns wf_term() using xor+seq composition",
+        "synchronizing_merge/2 implemented: Takes [wf_term()] branches and wf_term() continuation, returns wf_term() using par+join(all)+seq",
+        "discriminator/2 implemented: Takes [wf_term()] branches and wf_term() continuation, returns wf_term() using join({first_n,1}) with auto-generated cancel scopes",
+        "n_out_of_m/3 implemented: Takes N (pos_integer), [wf_term()] branches, wf_term() continuation, returns wf_term() using par+join({n_of_m,N,M})",
+        "All derived patterns validate inputs (e.g., list length >= 2, 1 <= N <= M)",
+        "All derived patterns have complete -spec declarations and -doc comments with examples",
+        "discriminator/2 auto-generates unique scope IDs using make_ref()",
+        "Module documentation explains relationship to kernel primitives",
+        "wf_core depends only on wf_term (no other dependencies)",
+        "rebar3 compile succeeds",
+        "Dialyzer passes"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Derived patterns are syntactic sugar/combinations of kernel primitives. They must be implemented correctly to produce valid wf_term() structures."
+    },
+    {
+      "id": "US-006",
+      "title": "Create comprehensive test suite for wf_term",
+      "acceptance_criteria": [
+        "test/wf_term_tests.erl module exists and compiles",
+        "Tests for all 9 raw constructors verify correct tuple structure",
+        "Tests for all 9 smart constructors with valid inputs (should succeed)",
+        "Tests for all 9 smart constructors with invalid inputs (should throw badarg)",
+        "Tests for well_formed/1 with valid terms (should return ok)",
+        "Tests for well_formed/1 with invalid terms (should return {error, Errors})",
+        "Tests verify all validation invariants: branch counts, policy formats, task metadata, cancel scope nesting",
+        "Tests cover nested structures (e.g., par containing seq containing task)",
+        "Tests verify error messages have correct structure",
+        "rebar3 eunit passes with 100% success rate",
+        "Code coverage > 90% for wf_term.erl"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "Tests must be comprehensive, covering both positive and negative cases. Use EUnit test generators for flexible test organization."
+    },
+    {
+      "id": "US-007",
+      "title": "Create comprehensive test suite for wf_core",
+      "acceptance_criteria": [
+        "test/wf_core_tests.erl module exists and compiles",
+        "Tests for simple_merge/2 verify xor+seq structure",
+        "Tests for synchronizing_merge/2 verify par+join(all)+seq structure",
+        "Tests for discriminator/2 verify cancel scopes and first_n join, verify scopes are unique",
+        "Tests for n_out_of_m/3 verify par+join({n_of_m,N,M}) structure",
+        "Tests for all derived patterns with invalid inputs (should throw)",
+        "Tests verify all derived patterns produce well-formed terms (call wf_term:well_formed/1)",
+        "Tests cover edge cases: N=1, N=M, N=M-1 for n_out_of_m/3",
+        "Tests verify derived patterns can nest (e.g., n_out_of_m containing discriminator)",
+        "rebar3 eunit passes with 100% success rate",
+        "Code coverage > 90% for wf_core.erl"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "Tests must verify both structure and validity of derived pattern outputs. Use pattern matching in assertions to verify term structure."
+    },
+    {
+      "id": "US-008",
+      "title": "Integration verification and documentation",
+      "acceptance_criteria": [
+        "rebar3 compile succeeds with zero warnings",
+        "rebar3 dialyzer passes with no type errors",
+        "rebar3 eunit passes all tests (100% success rate)",
+        "Code coverage > 90% for both wf_term.erl and wf_core.erl",
+        "All modules have complete -moduledoc documentation",
+        "All exported functions have -spec and -doc comments",
+        "Design decisions documented in module headers (transparency, validation scope, two-tier API)",
+        "No circular dependencies",
+        "No dependencies on future items (wf_compile, wf_validate)",
+        "wf_term() type is ready for item 004 (compiler) to consume",
+        "Manual review confirms pure functional design (no side effects, no process spawning)",
+        "Manual review confirms all constructor guards are syntactically correct"
+      ],
+      "priority": 4,
+      "status": "pending",
+      "notes": "Final verification phase ensuring all components are production-ready and integrated properly with existing OTP scaffold."
+    }
+  ]
+}
