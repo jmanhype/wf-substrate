@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "id": "009-multiple-instance-support",
+  "branch_name": "wreckit/009-multiple-instance-support",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Define wf_mi types and extend token record",
+      "acceptance_criteria": [
+        "wf_mi.erl module created with mi_join_policy(), mi_instance(), and mi_config() types",
+        "#token{} record extended with instance_id field (default undefined)",
+        "All token construction sites updated to include instance_id = undefined",
+        "Module compiles without errors",
+        "Existing wf_exec tests pass (backward compatibility verified)",
+        "Type exports match specification (spawn_instances/4, collect_result/3, check_join/2, cancel_remaining/2)"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Foundation for all MI functionality. Token record change is backward compatible (instance_id defaults to undefined)."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement instance spawning (eval_instance_count and spawn_instances)",
+      "acceptance_criteria": [
+        "eval_instance_count/2 handles {fixed, N} - returns {ok, N}",
+        "eval_instance_count/2 handles {dynamic, Min, Max} - returns {ok, Min} (v1 stub)",
+        "eval_instance_count/2 validates ranges (zero N, Min > Max, Min = 0) - returns error tuples",
+        "spawn_instances/4 creates N instances with unique instance_id ({instance, make_ref()})",
+        "spawn_instances/4 assigns sequential instance_num (1..N)",
+        "spawn_instances/4 creates mi_config record with policy, join_policy, body_ip, scope_id, instance_ids",
+        "spawn_instances/4 enforces maximum 1000 instances (error if exceeded)",
+        "Unit tests cover: fixed count, dynamic count, error cases, unique IDs, sequential numbers"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Core instance creation logic. Dynamic count is stub (returns Min) for v1. Safety limit prevents memory exhaustion."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement MI_SPAWN opcode handler in wf_exec",
+      "acceptance_criteria": [
+        "execute_mi_spawn/2 function added to wf_exec.erl",
+        "Calls wf_mi:spawn_instances/4 to create instances",
+        "Creates N tokens with same IP (body) but different instance_id",
+        "Creates branch_info tracking all instance tokens",
+        "Creates join_counter for sync policies (wait_all, wait_n, first_complete)",
+        "Does NOT create join_counter for fire-and-forget (none policy)",
+        "Join counter required count calculated correctly: wait_all → N, wait_n → N, first_complete → 1",
+        "mi_join_to_exec_join/1 maps MI policies to wf_exec policies",
+        "MI_SPAWN opcode added to execute_opcode/2 dispatch table",
+        "Unit tests: fixed count spawns N tokens, dynamic count spawns Min, join policies create correct counters, fire-and-forget has no join",
+        "Existing wf_exec tests pass (backward compatibility)"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Integrates MI with executor. Reuses PAR_FORK pattern but spawns to same IP instead of different IPs."
+    },
+    {
+      "id": "US-004",
+      "title": "Implement result collection for MI instances",
+      "acceptance_criteria": [
+        "wf_mi:collect_result/3 implemented",
+        "Finds branch for instance via find_branch_for_instance/3",
+        "Increments join counter with instance result",
+        "Returns {UpdatedExecState, JoinSatisfied} where JoinSatisfied is boolean",
+        "Fire-and-forget (none policy) returns {ExecState, false}, no join counter modification",
+        "wf_exec:execute_done/2 detects MI instances (instance_id /= undefined)",
+        "MI instances call wf_mi:collect_result/3",
+        "Non-MI instances use existing branch logic (backward compatible)",
+        "Unit tests: join counter increments correctly, join satisfaction detected after N completions",
+        "Integration test: MI wait_all completes after all instances done"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Enables join counter tracking for MI. Detection via instance_id field separates MI from non-MI tokens."
+    },
+    {
+      "id": "US-005",
+      "title": "Implement join checking and cancellation of remaining instances",
+      "acceptance_criteria": [
+        "wf_mi:check_join/2 implemented",
+        "Returns {ok, satisfied} when completed >= required",
+        "Returns {ok, not_satisfied} when completed < required",
+        "Returns {error, no_active_join} when no join counter exists",
+        "wf_mi:cancel_remaining/2 implemented",
+        "Finds all instances in same MI group via branch_map",
+        "Marks remaining instances as cancelled (status = cancelled)",
+        "Does NOT cancel completed instance",
+        "wf_exec:execute_done/2 calls cancel_remaining/2 when join satisfied and policy is wait_n or first_complete",
+        "Cancelled instances excluded from active tokens by select_next_token/2",
+        "Unit tests: check_join states, cancel_remaining marks correct instances",
+        "Integration tests: MI wait_n cancels remainder after N complete, MI first_complete cancels all others after first complete"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Completes MI execution logic. Cancellation is internal (token status change) for v1, no wf_cancel dependency."
+    },
+    {
+      "id": "US-006",
+      "title": "Create comprehensive test suite for MI functionality",
+      "acceptance_criteria": [
+        "wf_mi_tests.erl created with unit tests for all wf_mi functions",
+        "Unit tests: eval_instance_count (fixed, dynamic, errors), spawn_instances (counts, unique IDs, sequential numbers), collect_result (increment, satisfaction), check_join (satisfied, not_satisfied), cancel_remaining (marks cancelled)",
+        "Property tests: instance_count_correct, instance_ids_unique, join_satisfied_after_n_complete",
+        "wf_exec_tests.erl extended with MI integration tests",
+        "Integration tests: MI_SPAWN spawns instances, MI wait_all execution, MI wait_n execution (remainder cancelled), MI first_complete execution (others cancelled), MI fire-and-forget execution (no join)",
+        "Performance benchmarks: spawn 10 instances (< 1ms), spawn 100 instances (< 10ms), spawn 1000 instances (< 100ms)",
+        "Code coverage > 90% for wf_mi module",
+        "All tests pass (unit, integration, property, performance)",
+        "Existing wf_exec tests pass (backward compatibility verified)"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Comprehensive testing ensures correctness and performance. Property tests verify invariants across randomized inputs."
+    }
+  ]
+}

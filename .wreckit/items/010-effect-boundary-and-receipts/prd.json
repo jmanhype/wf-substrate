@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "id": "010-effect-boundary-and-receipts",
+  "branch_name": "wreckit/010-effect-boundary-and-receipts",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Create wf_effect module with types and records",
+      "acceptance_criteria": [
+        "wf_effect.erl module compiles without errors",
+        "effect_spec record defined with fields: effect_id, effect_type, payload, idempotency_key, timeout",
+        "effect record defined with fields: effect_id, spec, status, submitted_at, completed_at, result, reason",
+        "All type exports resolve correctly (effect_id, effect_type, effect_spec, effect, case_id, step_seq, scope_id, idempotency_key, effect_status, effect_result)",
+        "gen_server callback skeleton implemented",
+        "wf_effect.hrl header file created and exports records",
+        "new_spec/4 function creates effect_spec from components",
+        "set_idempotency_key/2 function sets idempotency key",
+        "set_timeout/2 function sets timeout",
+        "Module documentation is complete"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Phase 1 - Foundation for all subsequent work. Effect ID format: composite key {CaseId, StepSeq, ScopeId} for traceability."
+    },
+    {
+      "id": "US-002",
+      "title": "Create wf_receipt module with receipt storage",
+      "acceptance_criteria": [
+        "wf_receipt.erl module compiles without errors",
+        "receipt record defined with fields: receipt_id, case_id, effect_id, effect_spec_hash, idempotency_key, timestamp, result, duration_us",
+        "wf_receipt.hrl header file created and exports receipt record",
+        "gen_server callback skeleton implemented",
+        "ETS table wf_receipts created as ordered_set for append-only semantics",
+        "new/3 function creates receipt from effect_id, result, duration",
+        "store/2 function stores receipt with effect_spec hash and idempotency_key",
+        "lookup/2 function looks up receipt by case_id and effect_id",
+        "lookup_by_key/2 function looks up receipt by case_id and idempotency_key",
+        "all/1 function returns all receipts for a case_id",
+        "verify/2 function verifies receipt matches effect_spec (hash check)",
+        "hash_effect_spec/1 function hashes effect_spec using SHA-256"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Phase 2 - Receipt storage is append-only audit trail. Hash algorithm: SHA-256 via crypto:hash/2."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement effect yielding with idempotency checking",
+      "acceptance_criteria": [
+        "wf_effect:yield/4 implemented with idempotency check",
+        "Idempotency check calls wf_receipt:lookup_by_key/2 before executing",
+        "If idempotency_key is undefined, execute new effect",
+        "If idempotency_key exists and receipt found, return cached receipt",
+        "If idempotency_key exists but no receipt, execute new effect",
+        "execute_new_effect/2 creates effect record and stores in ETS",
+        "Effect execution is async via spawn_link (isolation from executor)",
+        "complete_effect/3 creates receipt on effect completion",
+        "get_result/1 polling interface implemented for executor",
+        "Mock effect handlers implemented (mock_effect, mock_delay, mock_error, mock_crash)"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Phase 3 - Core yield/resume pattern. Effects execute asynchronously to avoid blocking executor."
+    },
+    {
+      "id": "US-004",
+      "title": "Integrate effect system with wf_exec executor",
+      "acceptance_criteria": [
+        "wf_exec.hrl token status enum includes blocked_effect",
+        "wf_exec.hrl token record includes current_effect field",
+        "wf_exec.hrl exec_state status enum includes blocked_effect",
+        "wf_exec.hrl exec_state record includes case_id field",
+        "wf_exec:new/1 generates case_id using make_ref()",
+        "wf_exec:execute_task_exec/2 handles {effect, EffectSpec, ContCtx} return from tasks",
+        "Task function can yield {effect, EffectSpec, ContCtx} tuple",
+        "wf_exec:yield/4 calls wf_effect:yield/4 with case_id, step_seq, scope_id, effect_spec",
+        "If cached receipt returned, executor resumes immediately with result in context",
+        "If new effect, executor transitions to blocked_effect status",
+        "wf_exec:step/2 checks effect completion when status is blocked_effect",
+        "wf_exec:step/2 polls wf_effect:get_result/1 for pending effect",
+        "On effect completion, executor resumes with result in context",
+        "On effect cancellation, executor transitions to cancelled status",
+        "On effect failure, executor transitions to failed status",
+        "Token current_effect field cleared on effect completion"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Phase 5 - Executor integration. Polling model for effect completion (async notification deferred to v2)."
+    },
+    {
+      "id": "US-005",
+      "title": "Implement effect cancellation",
+      "acceptance_criteria": [
+        "wf_effect:cancel_effect/2 implemented to cancel pending effects",
+        "Cancellation marks effect status as cancelled",
+        "Cancellation sets reason field on effect record",
+        "Cancellation creates cancelled receipt via wf_receipt",
+        "Already completed effects cannot be cancelled (returns error)",
+        "Already cancelled effects return error",
+        "wf_effect:is_cancelled/1 checks if effect is cancelled",
+        "Executor propagates cancellation to blocked_effect status",
+        "Cancelled effects discard results (ignored if effect completes after cancellation)"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Phase 6 - Cancellation integration with wf_cancel (item 008) is future work."
+    },
+    {
+      "id": "US-006",
+      "title": "Create comprehensive test suite for wf_effect",
+      "acceptance_criteria": [
+        "test/wf_effect_tests.erl created with EUnit tests",
+        "Effect spec creation tests (new_spec/4, set_idempotency_key/2, set_timeout/2)",
+        "Effect yielding tests (yield new effect, yield idempotent effect cached)",
+        "Effect cancellation tests (cancel_effect/2, is_cancelled/1)",
+        "Effect execution tests (mock handlers: mock_effect, mock_delay, mock_error, mock_crash)",
+        "Result polling tests (get_result/1 returns pending, ok, cancelled, error)",
+        "gen_server setup/teardown in test fixtures",
+        "All tests pass: eunit:test(wf_effect, [verbose])"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Phase 7 - Unit tests cover all wf_effect functions. Test fixtures start/stop gen_servers."
+    },
+    {
+      "id": "US-007",
+      "title": "Create comprehensive test suite for wf_receipt",
+      "acceptance_criteria": [
+        "test/wf_receipt_tests.erl created with EUnit tests",
+        "Receipt creation tests (new/3 creates correct receipt)",
+        "Receipt storage tests (store/2 stores with hash and key)",
+        "Receipt lookup tests (lookup/2 by effect_id, lookup_by_key/2 by key)",
+        "Receipt query tests (all/1 returns all receipts for case)",
+        "Receipt verification tests (verify/2 passes for correct hash, fails for tampered)",
+        "Hash consistency tests (hash_effect_spec/1 produces consistent hash)",
+        "gen_server setup/teardown in test fixtures",
+        "All tests pass: eunit:test(wf_receipt, [verbose])"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Phase 7 - Unit tests cover all wf_receipt functions. Test fixtures start/stop gen_servers."
+    },
+    {
+      "id": "US-008",
+      "title": "Create integration tests for wf_exec effect handling",
+      "acceptance_criteria": [
+        "test/wf_exec_tests.erl updated with integration tests",
+        "Task yields effect test (task returns {effect, Spec, Ctx})",
+        "Executor blocks on effect test (status transitions to blocked_effect)",
+        "Executor resumes after effect test (polling get_result/1, resumes on completion)",
+        "Idempotent effect resumes immediately test (cached receipt, no blocking)",
+        "Cancelled effect propagation test (executor transitions to cancelled)",
+        "Failed effect handling test (executor transitions to failed)",
+        "Effect result in context test (result maps put in ctx)",
+        "All tests pass: eunit:test(wf_exec, [verbose])"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Phase 7 - Integration tests verify end-to-end effect flow in executor."
+    },
+    {
+      "id": "US-009",
+      "title": "Add property-based tests for invariants",
+      "acceptance_criteria": [
+        "Property-based tests for receipt append-only invariant",
+        "Property-based tests for idempotency caching invariant",
+        "Property-based tests for effect ID uniqueness",
+        "Property-based tests for receipt hash verification",
+        "Property-based tests using PropEr or PropCheck",
+        "Properties defined and tested",
+        "Test coverage > 80%"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "Optional v1 enhancement. Property-based tests ensure invariants hold."
+    },
+    {
+      "id": "US-010",
+      "title": "Document effect system architecture and usage",
+      "acceptance_criteria": [
+        "Module documentation complete for wf_effect.erl",
+        "Module documentation complete for wf_receipt.erl",
+        "Effect pattern explained in comments",
+        "Idempotency usage documented with examples",
+        "Cancellation semantics documented",
+        "Receipt verification explained",
+        "Effect handler registration documented (future v2)",
+        "Examples of task functions yielding effects"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Documentation ensures maintainability and helps users understand effect system."
+    }
+  ]
+}

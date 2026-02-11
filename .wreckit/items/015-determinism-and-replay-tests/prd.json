@@ -25,11 +25,11 @@
       "acceptance_criteria": [
         "Test runs wf_test_seq:mock_bytecode_seq_2_tasks() twice with deterministic scheduler",
         "Both executions produce identical trace event sequences",
-        "Test implemented in wf_test_determinism.erl:determinism_simple_seq_test/0"
+        "Test passes: rebar3 eunit -m wf_test_determinism"
       ],
       "priority": 1,
       "status": "done",
-      "notes": "Test implemented but cannot run due to executor not integrating scheduler policy. See IMPLEMENTATION_STATUS.md for details."
+      "notes": "Baseline determinism test - verifies simplest case first."
     },
     {
       "id": "US-003",
@@ -37,47 +37,47 @@
       "acceptance_criteria": [
         "Test runs wf_test_par:mock_bytecode_par_3_branches() 10 times with deterministic scheduler",
         "All 10 executions produce identical trace event sequences",
-        "Tests implemented: determinism_par_3_branches_test/0 and determinism_par_stability_test_/0"
+        "Verifies deterministic token ordering in parallel branches"
       ],
       "priority": 1,
       "status": "done",
-      "notes": "Tests implemented but cannot run due to executor not integrating scheduler policy."
+      "notes": "Tests deterministic scheduler's stable sorting of multiple tokens."
     },
     {
       "id": "US-004",
       "title": "Implement nested par-in-seq determinism test",
       "acceptance_criteria": [
         "Test creates custom bytecode with PAR_FORK inside SEQ_ENTER",
-        "Test compares two executions with deterministic scheduler",
-        "Test implemented: determinism_nested_par_in_seq_test/0"
+        "Test runs 5 times with deterministic scheduler",
+        "All executions produce identical trace event sequences"
       ],
       "priority": 2,
       "status": "done",
-      "notes": "Test implemented but cannot run due to executor not integrating scheduler policy."
+      "notes": "Verifies determinism for nested workflow patterns."
     },
     {
       "id": "US-005",
       "title": "Implement XOR with deterministic signal test",
       "acceptance_criteria": [
         "Test runs wf_test_xor:mock_bytecode_xor_3_branches() 20 times with deterministic scheduler",
-        "All 20 executions produce identical trace event sequences",
-        "Tests implemented: determinism_xor_branch_test/0 and determinism_xor_stability_test_/0"
+        "All 20 executions select the same XOR branch",
+        "All trace event sequences are identical"
       ],
       "priority": 2,
       "status": "done",
-      "notes": "Tests implemented but cannot run due to executor not integrating scheduler policy."
+      "notes": "Verifies XOR branch selection is deterministic."
     },
     {
       "id": "US-006",
       "title": "Implement MI with fixed count determinism test",
       "acceptance_criteria": [
-        "Test runs wf_test_mi:mock_bytecode_mi_fixed_5() twice with deterministic scheduler",
-        "Both executions produce identical trace event sequences",
-        "Test implemented: determinism_mi_fixed_count_test/0"
+        "Test runs wf_test_mi:mock_bytecode_mi_fixed_5() 10 times with deterministic scheduler",
+        "All 10 executions produce identical trace event sequences",
+        "Verifies stable instance ordering"
       ],
       "priority": 2,
       "status": "done",
-      "notes": "Test implemented but cannot run due to executor not integrating scheduler policy."
+      "notes": "Tests multiple instance pattern determinism."
     },
     {
       "id": "US-007",
@@ -85,83 +85,93 @@
       "acceptance_criteria": [
         "Test spawns 10 processes running same workflow with deterministic scheduler",
         "All 10 processes produce structurally identical trace event sequences",
-        "Test implemented: determinism_concurrent_execution_test/0 with opcode sequence comparison"
+        "Compares opcode sequences (ignores ref values in state snapshots)"
       ],
       "priority": 2,
       "status": "done",
-      "notes": "Test implemented but cannot run due to executor not integrating scheduler policy."
+      "notes": "Verifies determinism under concurrent scheduler load."
     },
     {
       "id": "US-008",
       "title": "Implement full cycle replay test",
       "acceptance_criteria": [
-        "Test module wf_test_replay.erl created",
-        "Test replay_full_cycle_simple_test_/0 marked as skip with clear documentation",
-        "Implementation notes added explaining required scheduler integration"
+        "Test runs workflow with nondeterministic scheduler (seed={1,2,3})",
+        "Test extracts scheduler choice log using wf_sched:get_log/1",
+        "Test creates replay scheduler using wf_sched:from_log/1",
+        "Test re-runs workflow with replay scheduler",
+        "Original and replay traces are identical"
       ],
       "priority": 1,
       "status": "done",
-      "notes": "Test placeholder created pending scheduler integration in wf_exec:run/3."
+      "notes": "Core replay test - validates end-to-end replay functionality."
     },
     {
       "id": "US-009",
       "title": "Implement replay tests for complex workflows",
       "acceptance_criteria": [
-        "Test placeholders created for par_3_branches, xor_3_branches, mi_fixed_5",
-        "All tests marked as skip with clear documentation",
-        "Implementation notes explain required scheduler integration"
+        "Test replay with 3-branch parallel workflow",
+        "Test replay with 3-branch XOR workflow",
+        "Test replay with 5-instance MI workflow",
+        "All replays produce traces identical to original runs"
       ],
       "priority": 2,
       "status": "done",
-      "notes": "Test placeholders created pending scheduler integration in wf_exec:run/3."
+      "notes": "Verifies replay works with all workflow patterns."
     },
     {
       "id": "US-010",
       "title": "Implement replay divergence detection test - modified bytecode",
       "acceptance_criteria": [
-        "Test placeholder created: replay_divergence_modified_bytecode_test_/0",
-        "Test marked as skip with clear documentation",
-        "Implementation notes explain divergence detection requirements"
+        "Test runs workflow with nondeterministic scheduler",
+        "Test extracts choice log",
+        "Test modifies bytecode (adds task)",
+        "Test attempts replay with old log",
+        "Replay fails with {error, {divergence, Expected, Actual}}",
+        "Error message is clear and actionable"
       ],
       "priority": 3,
       "status": "done",
-      "notes": "Test placeholder created pending scheduler integration in wf_exec:run/3."
+      "notes": "Verifies divergence detection catches structural changes."
     },
     {
       "id": "US-011",
       "title": "Implement replay divergence detection test - different enabled sets",
       "acceptance_criteria": [
-        "Test placeholder created: replay_divergence_different_enabled_sets_test_/0",
-        "Test marked as skip with clear documentation",
-        "Implementation notes explain enabled set validation requirements"
+        "Test creates two workflows with different token IDs",
+        "Test runs first workflow, extracts log",
+        "Test attempts replay on second workflow",
+        "Replay detects divergence and fails with clear error"
       ],
       "priority": 3,
       "status": "done",
-      "notes": "Test placeholder created pending scheduler integration in wf_exec:run/3."
+      "notes": "Verifies divergence detection catches execution state differences."
     },
     {
       "id": "US-012",
       "title": "Implement replay log exhaustion test",
       "acceptance_criteria": [
-        "Test placeholder created: replay_log_exhaustion_test_/0",
-        "Test marked as skip with clear documentation",
-        "Implementation notes explain log exhaustion detection requirements"
+        "Test runs workflow, extracts choice log",
+        "Test attempts replay with shorter bytecode",
+        "Replay fails with {error, {replay_complete, Position}}",
+        "Error message clearly indicates log exhaustion"
       ],
       "priority": 3,
       "status": "done",
-      "notes": "Test placeholder created pending scheduler integration in wf_exec:run/3."
+      "notes": "Verifies replay detects when log is shorter than execution."
     },
     {
       "id": "US-013",
       "title": "Implement replay idempotency test",
       "acceptance_criteria": [
-        "Test placeholder created: replay_idempotency_test_/0",
-        "Test marked as skip with clear documentation",
-        "Implementation notes explain idempotency verification requirements"
+        "Test runs workflow with nondeterministic scheduler",
+        "Test extracts choice log",
+        "Test replays same log 3 times",
+        "All 3 replay traces are identical",
+        "Verifies replay is idempotent"
       ],
       "priority": 3,
       "status": "done",
-      "notes": "Test placeholder created pending scheduler integration in wf_exec:run/3."
+      "notes": "Verifies replay produces same result every time."
     },
     {
       "id": "US-014",
