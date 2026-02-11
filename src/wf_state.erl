@@ -33,11 +33,14 @@
     get_ctx/1,
     put_ctx/2,
     get_tokens/1,
+    get_case_id/1,
+    get_status/1,
     add_token/3,
     remove_token/2,
     enter_scope/2,
     exit_scope/2,
     get_scope/2,
+    get_scopes/1,
     buffer_mutation/2,
     commit/1,
     rollback/1,
@@ -120,6 +123,7 @@
     tokens :: #{token_id() => #token{}},     %% Active tokens
     scopes :: #{scope_id() => #scope{}},     %% Cancel scopes
     metadata :: #metadata{},                  %% Execution metadata
+    status :: running | cancelled | done | failed,  %% Case status
     buffered_mutations :: [#mutation{}],      %% Buffered mutations
     ets_table :: ets:tid() | undefined       %% ETS table reference
 }).
@@ -147,6 +151,7 @@
     {enter_scope, scope_id(), scope_id()} | %% {ScopeId, ParentScope}
     {exit_scope, scope_id()} |
     {cancel_scope, scope_id()} |
+    {set_case_status, running | cancelled | done | failed} |
     {increment_step_count} |
     {set_metadata, term()}.
 
@@ -227,6 +232,7 @@ new(InitialCtx) when is_map(InitialCtx) ->
         tokens = #{},
         scopes = #{RootScopeId => RootScope},
         metadata = Metadata,
+        status = running,
         buffered_mutations = [],
         ets_table = EtsTable
     },
@@ -249,10 +255,25 @@ get_ctx(#state{ctx = Ctx}) ->
 get_tokens(#state{tokens = Tokens}) ->
     Tokens.
 
+%% @doc Get case ID
+-spec get_case_id(state()) -> case_id().
+get_case_id(#state{case_id = CaseId}) ->
+    CaseId.
+
+%% @doc Get case status
+-spec get_status(state()) -> running | cancelled | done | failed.
+get_status(#state{status = Status}) ->
+    Status.
+
 %% @doc Get scope by ID (returns undefined if not found)
 -spec get_scope(state(), scope_id()) -> #scope{} | undefined.
 get_scope(#state{scopes = Scopes}, ScopeId) ->
     maps:get(ScopeId, Scopes, undefined).
+
+%% @doc Get all scopes
+-spec get_scopes(state()) -> #{scope_id() => #scope{}}.
+get_scopes(#state{scopes = Scopes}) ->
+    Scopes.
 
 %% @doc Update context (buffers mutation)
 -spec put_ctx(state(), ctx()) -> {ok, state()}.
@@ -482,6 +503,10 @@ validate_single_mutation(#mutation{type = {cancel_scope, ScopeId}}, #state{scope
         true -> ok
     end;
 
+validate_single_mutation(#mutation{type = {set_case_status, Status}}, _State)
+  when Status =:= running; Status =:= cancelled; Status =:= done; Status =:= failed ->
+    ok;
+
 validate_single_mutation(#mutation{type = increment_step_count}, _State) ->
     ok;
 
@@ -547,6 +572,9 @@ apply_single_mutation(#mutation{type = {cancel_scope, ScopeId}}, State) ->
     Scope = maps:get(ScopeId, Scopes),
     UpdatedScope = Scope#scope{status = cancelled},
     State#state{scopes = Scopes#{ScopeId => UpdatedScope}};
+
+apply_single_mutation(#mutation{type = {set_case_status, Status}}, State) ->
+    State#state{status = Status};
 
 apply_single_mutation(#mutation{type = increment_step_count}, State) ->
     Metadata = State#state.metadata,

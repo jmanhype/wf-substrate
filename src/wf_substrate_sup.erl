@@ -44,6 +44,12 @@ init([]) ->
                  intensity => 10,
                  period => 60},
     ChildSpecs = [
+        #{id => wf_case_sup,
+          start => {wf_case_sup, start_link, []},
+          restart => permanent,
+          shutdown => 5000,
+          type => supervisor,
+          modules => [wf_case_sup]},
         #{id => wf_governance,
           start => {wf_governance, start_link, []},
           restart => permanent,

@@ -20,7 +20,7 @@
         "Dialyzer passes with no type errors"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Foundation for compiler and executor. Types must match ARCHITECTURE.md:1097-1116 exactly."
     },
     {
@@ -38,7 +38,7 @@
         "Dialyzer passes"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Two-pass approach: emit labels during compilation (pass 1), resolve to IPs (pass 2). Using make_ref() is safer than counter-based labels."
     },
     {
@@ -59,7 +59,7 @@
         "Dialyzer passes"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Main entry point orchestrates compilation. Dispatches to compile_* functions based on term type. Error handling: throw for contract violations, return {error, Reason} for structural issues."
     },
     {
@@ -79,7 +79,7 @@
         "rebar3 eunit passes task and seq tests"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Task is simplest (single opcode). Seq introduces label management. Foundation for more complex primitives."
     },
     {
@@ -101,7 +101,7 @@
         "rebar3 eunit passes par and xor tests"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Par spawns all branches and joins. Xor spawns only one branch (no join). Key difference is presence of JOIN_WAIT."
     },
     {
@@ -124,7 +124,7 @@
         "rebar3 eunit passes loop and join tests"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Loop requires backward jump (LOOP_BACK). Join is par with explicit policy. Both validate policy format before compilation."
     },
     {
@@ -145,7 +145,7 @@
         "rebar3 eunit passes cancel and mi tests"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Cancel is linear (no labels). Mi spawns instances then joins. Both validate policy format."
     },
     {
@@ -160,7 +160,7 @@
         "rebar3 eunit passes defer test"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Defer opcode not in spec. Omit in v1. May compile to xor in future with runtime handling of external events."
     },
     {
@@ -181,7 +181,7 @@
         "Code coverage > 90% for wf_vm.erl"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Tests must verify correctness of compilation, label resolution, and validation. Property-based tests ensure label resolution works for arbitrary workflows."
     },
     {
@@ -201,7 +201,7 @@
         "Documentation is clear enough for new developers to understand compilation process"
       ],
       "priority": 4,
-      "status": "pending",
+      "status": "done",
       "notes": "Documentation is critical for maintainability. Must explain design decisions (make_ref labels, two-pass compilation, defer omission)."
     },
     {
@@ -224,7 +224,7 @@
         "All error messages are descriptive and structured"
       ],
       "priority": 4,
-      "status": "pending",
+      "status": "done",
       "notes": "Final phase ensures production-ready compiler. All verification passes, documentation complete, no regressions."
     }
   ]
