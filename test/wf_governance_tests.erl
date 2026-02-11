@@ -7,25 +7,30 @@
 %%%====================================================================
 
 governance_setup() ->
-    {ok, Pid} = wf_governance:start_link(),
-    Pid.
+    {ok, _Apps} = application:ensure_all_started(wf_substrate),
+    %% wf_governance is already started by the application
+    %% Return the pid for cleanup compatibility
+    whereis(wf_governance).
 
 governance_cleanup(_Pid) ->
-    wf_governance:stop().
+    application:stop(wf_substrate).
 
 budget_setup() ->
-    {ok, Pid} = wf_budget:start_link(),
-    Pid.
+    %% wf_budget is already started by the application
+    whereis(wf_budget).
 
 budget_cleanup(_Pid) ->
-    wf_budget:stop().
+    %% wf_budget is stopped by application:stop
+    ok.
 
 approval_setup() ->
-    {ok, Pid} = wf_approval:start_link(),
-    Pid.
+    {ok, _Apps} = application:ensure_all_started(wf_substrate),
+    %% wf_approval is already started by the application
+    whereis(wf_approval).
 
 approval_cleanup(_Pid) ->
-    wf_approval:stop().
+    %% wf_approval is stopped by application:stop
+    application:stop(wf_substrate).
 
 %%%====================================================================
 %%% wf_governance tests

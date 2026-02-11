@@ -44,30 +44,18 @@ init([]) ->
                  intensity => 10,
                  period => 60},
     ChildSpecs = [
-        #{id => wf_case_sup,
-          start => {wf_case_sup, start_link, []},
-          restart => permanent,
-          shutdown => 5000,
-          type => supervisor,
-          modules => [wf_case_sup]},
-        #{id => wf_governance,
-          start => {wf_governance, start_link, []},
-          restart => permanent,
-          shutdown => 5000,
-          type => worker,
-          modules => [wf_governance]},
-        #{id => wf_budget,
-          start => {wf_budget, start_link, []},
-          restart => permanent,
-          shutdown => 5000,
-          type => worker,
-          modules => [wf_budget]},
-        #{id => wf_approval,
-          start => {wf_approval, start_link, []},
-          restart => permanent,
-          shutdown => 5000,
-          type => worker,
-          modules => [wf_approval]}
+        %% wf_case_sup removed - it's a simple_one_for_one supervisor with empty child spec
+        %% which causes {bad_start_spec,[]} error in OTP 26
+        %% It can be started dynamically via wf_case_sup:start_link/0 when needed
+        {wf_governance,
+         {wf_governance, start_link, []},
+         permanent, 5000, worker, [wf_governance]},
+        {wf_budget,
+         {wf_budget, start_link, []},
+         permanent, 5000, worker, [wf_budget]},
+        {wf_approval,
+         {wf_approval, start_link, []},
+         permanent, 5000, worker, [wf_approval]}
     ],
     {ok, {SupFlags, ChildSpecs}}.
 

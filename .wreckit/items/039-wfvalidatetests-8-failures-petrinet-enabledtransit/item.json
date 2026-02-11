@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "039-wfvalidatetests-8-failures-petrinet-enabledtransit",
+  "title": "wf_validate_tests (8 failures): petri_net, enabled_transitions, fire_transition, deadlock, validate — wf_validate returns different structures",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T21:01:46.689Z",
+  "updated_at": "2026-02-11T21:01:46.689Z"
+}

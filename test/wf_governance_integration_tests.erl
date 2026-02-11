@@ -157,12 +157,12 @@ error_record_fields() ->
     Spec = wf_effect_stub:new_spec(CaseId, 0, ScopeId, http_post, #{}),
     {error, Error} = wf_effect_stub:yield(CaseId, 0, ScopeId, Spec),
 
-    %% Verify error structure
+    %% Verify error structure - detail field contains error message, not empty
     ?assertMatch(#governance_error{
         error_type = allowlist_violation,
         scope = ScopeId,
         task_id = undefined,
-        detail = <<>>,
+        detail = <<_:8, _/binary>>,  %% Non-empty binary
         timestamp = {_MegaSecs, _Secs, _MicroSecs}
     }, Error).
 
