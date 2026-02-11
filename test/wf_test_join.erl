@@ -64,7 +64,7 @@ join_wait_all_3_test() ->
     {done, ExecState1} = wf_exec:run(ExecState0, 100, undefined),
     ?assert(wf_exec:is_done(ExecState1)),
     %% All 3 branches completed
-    _Tokens = ExecState1#exec_state.tokens,
+    Tokens = ExecState1#exec_state.tokens,
     TotalTokens = maps:size(Tokens),
     ?assertEqual(4, TotalTokens), % root + 3 branches
     CompleteCount = count_tokens_with_status(ExecState1, complete),
@@ -75,7 +75,7 @@ join_wait_all_5_test() ->
     ExecState0 = wf_exec:new(Bytecode),
     {done, ExecState1} = wf_exec:run(ExecState0, 100, undefined),
     ?assert(wf_exec:is_done(ExecState1)),
-    _Tokens = ExecState1#exec_state.tokens,
+    Tokens = ExecState1#exec_state.tokens,
     TotalTokens = maps:size(Tokens),
     ?assertEqual(6, TotalTokens), % root + 5 branches
     CompleteCount = count_tokens_with_status(ExecState1, complete),
@@ -91,7 +91,7 @@ join_wait_n_2_of_3_test() ->
     {done, ExecState1} = wf_exec:run(ExecState0, 100, undefined),
     ?assert(wf_exec:is_done(ExecState1)),
     %% 2 completed, 1 cancelled
-    _Tokens = ExecState1#exec_state.tokens,
+    Tokens = ExecState1#exec_state.tokens,
     TotalTokens = maps:size(Tokens),
     ?assertEqual(4, TotalTokens), % root + 3 branches
     CompleteCount = count_tokens_with_status(ExecState1, complete),
@@ -131,7 +131,7 @@ join_first_complete_4_test() ->
     {done, ExecState1} = wf_exec:run(ExecState0, 100, undefined),
     ?assert(wf_exec:is_done(ExecState1)),
     %% Only 1 completed, rest cancelled
-    _Tokens = ExecState1#exec_state.tokens,
+    Tokens = ExecState1#exec_state.tokens,
     TotalTokens = maps:size(Tokens),
     ?assertEqual(5, TotalTokens), % root + 4 branches
     CompleteCount = count_tokens_with_status(ExecState1, complete),
@@ -160,7 +160,7 @@ join_sync_merge_test() ->
     {done, ExecState1} = wf_exec:run(ExecState0, 100, undefined),
     ?assert(wf_exec:is_done(ExecState1)),
     %% All branches should complete (sync_merge is like wait_all)
-    _Tokens = ExecState1#exec_state.tokens,
+    Tokens = ExecState1#exec_state.tokens,
     TotalTokens = maps:size(Tokens),
     ?assertEqual(4, TotalTokens), % root + 3 branches
     CompleteCount = count_tokens_with_status(ExecState1, complete),
@@ -240,7 +240,7 @@ join_wait_all_m_branches_test_() ->
             {done, ExecState1} = wf_exec:run(ExecState0, 1000, undefined),
             ?assert(wf_exec:is_done(ExecState1)),
             %% All M branches completed
-            _Tokens = ExecState1#exec_state.tokens,
+            Tokens = ExecState1#exec_state.tokens,
             ?assertEqual(M + 1, maps:size(Tokens))
         end}
     end, [2, 3, 5, 10]).
