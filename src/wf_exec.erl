@@ -153,6 +153,8 @@ step(ExecState, SchedDecision) ->
     case ExecState#exec_state.status of
         blocked_effect ->
             step_check_effect(ExecState, SchedDecision);
+        blocked_join ->
+            step_check_join(ExecState, SchedDecision);
         _ ->
             step_normal(ExecState, SchedDecision)
     end.
@@ -213,12 +215,97 @@ step_check_effect(ExecState, _SchedDecision) ->
             {ExecState, TraceEvent}
     end.
 
+%% @private Check join completion (blocked_join path)
+step_check_join(ExecState, _SchedDecision) ->
+    case maps:keys(ExecState#exec_state.join_counters) of
+        [] ->
+            %% No join counters (shouldn't happen), unblock
+            {ExecState#exec_state{status = running}, #{type => join_unblocked, reason => no_joins}};
+        _ ->
+            %% Check if any join is satisfied
+            JoinId = find_active_join(ExecState),
+            JoinCounter = maps:get(JoinId, ExecState#exec_state.join_counters),
+
+            case JoinCounter#join_counter.completed >= JoinCounter#join_counter.required of
+                true ->
+                    %% Join satisfied, create continuation token
+                    JoinCounters = maps:remove(JoinId, ExecState#exec_state.join_counters),
+                    BranchMap = remove_branch_by_join(JoinId, ExecState#exec_state.branch_map),
+
+                    ContinuationTokenId = make_ref(),
+                    ContinuationToken = #token{
+                        token_id = ContinuationTokenId,
+                        ip = ExecState#exec_state.ip + 1,
+                        scope_id = get_current_scope(ExecState),
+                        value = merge_results(JoinCounter#join_counter.results, JoinCounter#join_counter.policy),
+                        status = active,
+                        instance_id = undefined
+                    },
+                    Tokens = maps:put(ContinuationTokenId, ContinuationToken, ExecState#exec_state.tokens),
+
+                    TraceEvent = #{
+                        type => join_complete,
+                        join_id => JoinId,
+                        results => JoinCounter#join_counter.results
+                    },
+                    {ExecState#exec_state{
+                        ip = ExecState#exec_state.ip + 1,
+                        tokens = Tokens,
+                        join_counters = JoinCounters,
+                        branch_map = BranchMap,
+                        status = running,
+                        current_token = ContinuationTokenId
+                    }, TraceEvent};
+                false ->
+                    %% Join not satisfied, remain blocked
+                    TraceEvent = #{
+                        type => blocked_join,
+                        join_id => JoinId,
+                        completed => JoinCounter#join_counter.completed,
+                        required => JoinCounter#join_counter.required
+                    },
+                    {ExecState, TraceEvent}
+            end
+    end.
+
 %% @private Normal step (not blocked)
 step_normal(ExecState, SchedDecision) ->
-    Opcode = fetch_opcode(ExecState),
-    NewExecState = execute_opcode(Opcode, ExecState, SchedDecision),
-    TraceEvent = #{opcode => Opcode, step_count => NewExecState#exec_state.step_count},
-    {NewExecState, TraceEvent}.
+    case ExecState#exec_state.current_token of
+        undefined ->
+            %% No active tokens available
+            case maps:values(ExecState#exec_state.tokens) of
+                [] ->
+                    %% All tokens complete, mark as done
+                    FinalExecState = ExecState#exec_state{status = done},
+                    TraceEvent = #{type => done, reason => no_tokens},
+                    {FinalExecState, TraceEvent};
+                _ ->
+                    %% Tokens exist but none are active (blocked state)
+                    TraceEvent = #{type => blocked, reason => no_active_token},
+                    {ExecState, TraceEvent}
+            end;
+        _TokenId ->
+            %% In multi-token mode, sync IP with current token before fetching opcode
+            %% In single-token mode, trust ExecState.ip (token.ip is stale)
+            SyncedExecState = case maps:size(ExecState#exec_state.tokens) > 1 of
+                true -> sync_ip_with_current_token(ExecState);
+                false -> ExecState
+            end,
+            Opcode = fetch_opcode(SyncedExecState),
+            NewExecState = execute_opcode(Opcode, SyncedExecState, SchedDecision),
+            TraceEvent = #{opcode => Opcode, step_count => NewExecState#exec_state.step_count},
+            {NewExecState, TraceEvent}
+    end.
+
+%% @private Sync ExecState.ip with current token's IP
+%% This is necessary in multi-token execution where each token has its own IP.
+-spec sync_ip_with_current_token(exec_state()) -> exec_state().
+sync_ip_with_current_token(#exec_state{current_token = undefined} = ExecState) ->
+    %% No current token, keep IP as-is (will be handled elsewhere)
+    ExecState;
+sync_ip_with_current_token(#exec_state{current_token = CurrentToken, tokens = Tokens} = ExecState) ->
+    Token = maps:get(CurrentToken, Tokens),
+    ExecState#exec_state{ip = Token#token.ip}.
 
 %% @doc Execute N quanta, yield when exhausted or terminal
 -spec run(exec_state(), pos_integer(), term()) ->
@@ -470,7 +557,8 @@ execute_par_fork({_ParFork, TargetIPs}, ExecState) ->
 %% @doc Execute MI_SPAWN: spawn N instances of body at same IP
 %% Unlike PAR_FORK (spawns to different IPs), MI_SPAWN spawns N instances
 %% to the SAME body IP, with per-instance state via instance_id
-execute_mi_spawn({'MI_SPAWN', {MIPolicy, MIJoinPolicy, BodyIP}}, ExecState) ->
+execute_mi_spawn({MiSpawn, {MIPolicy, MIJoinPolicy, BodyIP}}, ExecState)
+        when MiSpawn =:= 'MI_SPAWN'; MiSpawn =:= mi_spawn ->
     %% Spawn instances via wf_mi
     {ok, Instances, _MIConfig} = wf_mi:spawn_instances(
         MIPolicy, MIJoinPolicy, BodyIP, get_current_scope(ExecState)
@@ -605,10 +693,12 @@ execute_join_wait({_JoinWait, _Policy}, ExecState) ->
 %% @doc Find active join point
 -spec find_active_join(exec_state()) -> term().
 find_active_join(#exec_state{join_counters = JoinCounters}) ->
-    %% For simplicity, return first join_id
-    %% In production, should be exactly one join
-    [JoinId | _] = maps:keys(JoinCounters),
-    JoinId.
+    case maps:keys(JoinCounters) of
+        [] ->
+            error({no_active_join, join_counters_empty});
+        [JoinId | _] ->
+            JoinId
+    end.
 
 %% @doc Remove branch entry by join_id
 -spec remove_branch_by_join(term(), #{term() => #branch_info{}}) -> #{term() => #branch_info{}}.
