@@ -2,12 +2,14 @@
   "schema_version": 1,
   "id": "031-fix-the-2-remaining-test-failures-in-testwfcaserun",
   "title": "Fix the 2 remaining test failures in test/wf_case_runner_tests.erl:",
-  "state": "critique",
+  "state": "done",
   "overview": "",
-  "branch": null,
+  "branch": "wreckit/031-fix-the-2-remaining-test-failures-in-testwfcaserun",
   "pr_url": null,
   "pr_number": null,
   "last_error": null,
   "created_at": "2026-02-11T20:40:39.996Z",
-  "updated_at": "2026-02-11T20:49:23.375Z"
+  "updated_at": "2026-02-11T20:49:25.662Z",
+  "rollback_sha": "ed0bc7f34e4fae11102fbd462a9aafef4f33ec60",
+  "completed_at": "2026-02-11T20:49:25.662Z"
 }

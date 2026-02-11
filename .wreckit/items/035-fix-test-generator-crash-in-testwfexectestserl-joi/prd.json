@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "id": "035-fix-test-generator-crash-in-testwfexectestserl-joi",
+  "branch_name": "wreckit/035-fix-test-generator-crash-in-testwfexectestserl-joi",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Add IP synchronization helper function to sync ExecState.ip with current token's IP",
+      "acceptance_criteria": [
+        "Helper function sync_ip_with_current_token/1 added to wf_exec.erl",
+        "Function handles undefined current_token gracefully",
+        "Function returns updated ExecState with ip field synchronized",
+        "Function includes -spec type specification",
+        "Function placed after step_normal/2 function (after line 221)"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is the foundation for all IP synchronization. The helper must be bulletproof as it will be called on every step execution."
+    },
+    {
+      "id": "US-002",
+      "title": "Modify step_normal/2 to sync IP before fetching opcode and handle undefined current_token",
+      "acceptance_criteria": [
+        "step_normal/2 calls sync_ip_with_current_token/1 before fetch_opcode/2",
+        "step_normal/2 handles undefined current_token case with proper tuple return",
+        "When current_token is undefined and no tokens exist, returns {ExecState#exec_state{status=done}, TraceEvent}",
+        "When current_token is undefined but tokens exist, returns {ExecState, #{type=>blocked}}",
+        "Normal path uses SyncedExecState for opcode fetch and execution",
+        "Compilation succeeds with no warnings"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is the critical fix. Must ensure the return type is always {exec_state(), map()} in all branches to match the spec."
+    },
+    {
+      "id": "US-003",
+      "title": "Add blocked_join case to step/2 function dispatch",
+      "acceptance_criteria": [
+        "step/2 function includes blocked_join case in case expression",
+        "blocked_join case dispatches to step_check_join/2 handler",
+        "Case placed between blocked_effect and default cases",
+        "Compilation succeeds",
+        "Existing blocked_effect handling still works"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "This enables the blocked_join status to be properly handled. The order of cases doesn't matter in Erlang's pattern matching, but placing it logically helps readability."
+    },
+    {
+      "id": "US-004",
+      "title": "Create step_check_join/2 function to handle blocked_join status",
+      "acceptance_criteria": [
+        "step_check_join/2 function added after step_check_effect/2",
+        "Function checks if join_counters is empty and unblocks if so",
+        "Function calls find_active_join/1 to get active join_id",
+        "Function checks if join counter is satisfied (completed >= required)",
+        "When satisfied: creates continuation token, removes join counter, updates branch_map, returns running status",
+        "When not satisfied: returns blocked_join status with trace event",
+        "Returns {exec_state(), map()} tuple in all code paths",
+        "Compilation succeeds"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "The continuation token creation logic is complex. Ensure ip is set to ExecState.ip + 1 to advance past JOIN_WAIT instruction. The merge_results/2 call uses the join_counter's policy."
+    },
+    {
+      "id": "US-005",
+      "title": "Add defensive guard to find_active_join/1 for empty join_counters",
+      "acceptance_criteria": [
+        "find_active_join/1 returns error({no_active_join, join_counters_empty}) when join_counters is empty",
+        "Function uses case expression on maps:keys(JoinCounters)",
+        "Normal path returns [JoinId | _] -> JoinId",
+        "Compilation succeeds",
+        "Error is intentional and provides clear debugging information"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "This is defensive programming. The step_check_join/2 function already handles the empty case, so this error should never be hit in normal operation. It's a safeguard against logic errors."
+    },
+    {
+      "id": "US-006",
+      "title": "Verify par_fork_test_ passes with IP synchronization",
+      "acceptance_criteria": [
+        "Test par_fork_test_ executes without crashes or badmatch errors",
+        "Test completes successfully with assertion passing",
+        "rebar3 eunit --module=wf_exec_tests --test=par_fork_test_ shows 1 test passed",
+        "Test output shows 0 failures, 0 cancelled"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "This validates that Phase 1 (IP synchronization) fixes the basic parallel execution. This test doesn't hit JOIN_WAIT, so it should pass after just Phase 1."
+    },
+    {
+      "id": "US-007",
+      "title": "Verify join_wait_test_ passes all 6 steps without crashing",
+      "acceptance_criteria": [
+        "Test join_wait_test_ executes 6 steps successfully",
+        "Assertion on line 124 (?_assertEqual(6, wf_exec:get_step_count(ExecState6))) passes",
+        "Test completes without badmatch errors",
+        "Test completes without generator crash",
+        "rebar3 eunit --module=wf_exec_tests --test=join_wait_test_ shows 1 test passed",
+        "Test output shows 0 failures, 0 cancelled"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "This is the main target. The test currently crashes with a badmatch error. After Phases 1 and 2, it should complete all 6 steps successfully."
+    },
+    {
+      "id": "US-008",
+      "title": "Verify all MI (Multiple Instance) tests pass",
+      "acceptance_criteria": [
+        "Test mi_spawn_test_ passes",
+        "Test mi_spawn_fire_and_forget_test_ passes",
+        "Test mi_execution_wait_all_test_ passes",
+        "Test mi_execution_wait_n_test_ passes",
+        "Test mi_execution_first_complete_test_ passes",
+        "rebar3 eunit --module=wf_exec_tests shows all MI tests passed",
+        "0 failures, 0 cancelled in MI tests"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "These tests are the other 4 cancelled tests that cascade from the join_wait_test_ failure. They should all pass after the fix."
+    },
+    {
+      "id": "US-009",
+      "title": "Verify no regressions in single-token executor tests",
+      "acceptance_criteria": [
+        "Test new_test_ passes",
+        "Test single_task_test_ passes",
+        "Test done_test_ passes",
+        "Test sequence_test_ passes",
+        "Test quanta_yield_test_ passes",
+        "Test run_until_done_test_ passes",
+        "All single-token tests show 0 failures, 0 cancelled"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Critical to ensure we didn't break the working single-token executor. These tests use sequential execution and should not be affected by multi-token fixes."
+    },
+    {
+      "id": "US-010",
+      "title": "Verify full test suite passes with 0 failures and 0 cancelled",
+      "acceptance_criteria": [
+        "rebar3 eunit --module=wf_exec_tests completes successfully",
+        "All 30+ tests in wf_exec_tests pass",
+        "Test summary shows 0 failures, 0 cancelled",
+        "Full rebar3 eunit run shows no regressions in other modules",
+        "Compilation succeeds with 0 warnings",
+        "No badmatch errors in test output"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Final validation. This is the ultimate success criteria: 0 failures, 0 cancelled in the entire test suite. The fix is complete when this passes."
+    }
+  ]
+}
