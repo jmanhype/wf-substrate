@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "id": "004-bytecode-compiler",
+  "branch_name": "wreckit/004-bytecode-compiler",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Define bytecode type system in wf_vm.erl",
+      "acceptance_criteria": [
+        "wf_vm.erl module exists and compiles",
+        "wf_bc() type defined as [opcode()]",
+        "opcode() union type defined with all 12 opcodes (SEQ_ENTER, SEQ_NEXT, PAR_FORK, JOIN_WAIT, XOR_CHOOSE, LOOP_BACK, LOOP_CHECK, CANCEL_SCOPE, MI_SPAWN, TASK_EXEC, DONE)",
+        "join_policy() type defined: all | sync_merge | {first_n, pos_integer()} | {n_of_m, pos_integer(), pos_integer()} | first_complete",
+        "loop_policy() type defined: while | until | {count, non_neg_integer()}",
+        "mi_policy() type defined: {fixed, pos_integer()} | {dynamic, pos_integer(), pos_integer()}",
+        "label() type defined: {label, reference()}",
+        "All types exported with -export_type attribute",
+        "Module documentation explains bytecode format and design rationale (tagged tuples vs records)",
+        "rebar3 compile succeeds with zero warnings",
+        "Dialyzer passes with no type errors"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Foundation for compiler and executor. Types must match ARCHITECTURE.md:1097-1116 exactly."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement label generation and resolution infrastructure",
+      "acceptance_criteria": [
+        "make_label/0 function generates unique labels using erlang:make_ref()",
+        "build_label_map/1 scans bytecode and builds #{Label => IP} map",
+        "resolve_labels/1 replaces label references with integer IPs",
+        "resolve_labels/1 removes {label, Ref} markers from final bytecode",
+        "resolve_opcode_labels/2 handles all opcodes with label operands (SEQ_NEXT, PAR_FORK, XOR_CHOOSE, LOOP_BACK)",
+        "validate_bytecode/1 checks for unresolved labels and returns ok | {error, {unresolved_labels, Labels}}",
+        "Label resolution passes property-based test: random bytecode with labels resolves correctly",
+        "rebar3 compile succeeds",
+        "Dialyzer passes"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Two-pass approach: emit labels during compilation (pass 1), resolve to IPs (pass 2). Using make_ref() is safer than counter-based labels."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement main compiler entry point compile/1",
+      "acceptance_criteria": [
+        "wf_compile:compile/1 function with spec -spec compile(wf_term:wf_term()) -> {ok, wf_vm:wf_bc()} | {error, Reason}",
+        "compile/1 calls compile_term/1 for AST compilation",
+        "compile/1 calls resolve_labels/1 for label resolution",
+        "compile/1 calls validate_bytecode/1 for final validation",
+        "compile/1 returns {ok, Bytecode} on success",
+        "compile/1 returns {error, Reason} on validation failure",
+        "compile/1 catches errors and returns {error, Reason}",
+        "Module documentation explains compilation pipeline (5 stages)",
+        "wf_compile.erl module depends on wf_vm for types",
+        "wf_compile.erl module depends on wf_term for wf_term() type",
+        "rebar3 compile succeeds",
+        "Dialyzer passes"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Main entry point orchestrates compilation. Dispatches to compile_* functions based on term type. Error handling: throw for contract violations, return {error, Reason} for structural issues."
+    },
+    {
+      "id": "US-004",
+      "title": "Implement compilation for task and seq primitives",
+      "acceptance_criteria": [
+        "compile_term/1 dispatches on {task, Name, Metadata} tuple",
+        "compile_task/1 emits [{TASK_EXEC, Name}] when Name is atom",
+        "compile_term/1 dispatches on {seq, Left, Right} tuple",
+        "compile_seq/1 emits [SEQ_ENTER, LeftCode, SEQ_NEXT with label, label marker, RightCode]",
+        "compile_seq/1 uses make_label/0 to generate RightLabel",
+        "compile_seq/1 compiles Left and Right recursively",
+        "Unit test: compile_task_test() verifies TASK_EXEC emitted",
+        "Unit test: compile_seq_test() verifies SEQ_ENTER, SEQ_NEXT, both tasks emitted",
+        "Unit test: compile_seq_test() verifies SEQ_NEXT operand is integer (resolved label)",
+        "rebar3 compile succeeds",
+        "rebar3 eunit passes task and seq tests"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Task is simplest (single opcode). Seq introduces label management. Foundation for more complex primitives."
+    },
+    {
+      "id": "US-005",
+      "title": "Implement compilation for par and xor primitives",
+      "acceptance_criteria": [
+        "compile_term/1 dispatches on {par, Branches} tuple",
+        "compile_par/1 validates length(Branches) >= 2",
+        "compile_par/1 emits [PAR_FORK, BranchLabels, branches with labels and DONE, JOIN_WAIT all]",
+        "compile_par/1 generates branch label for each branch",
+        "compile_par/1 generates single join label",
+        "compile_term/1 dispatches on {xor, Alternatives} tuple",
+        "compile_xor/1 validates length(Alternatives) >= 2",
+        "compile_xor/1 emits [XOR_CHOOSE, AltLabels, alternatives with labels and DONE]",
+        "compile_xor/1 does NOT emit JOIN_WAIT (only one branch runs)",
+        "Unit test: compile_par_test() verifies PAR_FORK with 2 branch labels, JOIN_WAIT all",
+        "Unit test: compile_xor_test() verifies XOR_CHOOSE with 2 alt labels, no JOIN_WAIT",
+        "Unit tests verify all labels resolve to integers",
+        "rebar3 eunit passes par and xor tests"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Par spawns all branches and joins. Xor spawns only one branch (no join). Key difference is presence of JOIN_WAIT."
+    },
+    {
+      "id": "US-006",
+      "title": "Implement compilation for loop and join primitives",
+      "acceptance_criteria": [
+        "compile_term/1 dispatches on {loop, Policy, Body} tuple",
+        "compile_loop/1 emits [LOOP_CHECK, BodyCode, LOOP_BACK with label, exit label marker]",
+        "compile_loop/1 generates LoopHeadLabel and ExitLabel",
+        "compile_loop/1 supports all policies: while, until, {count, N}",
+        "compile_term/1 dispatches on {join, Policy, Branches} tuple",
+        "compile_join/1 validates length(Branches) >= 2",
+        "compile_join/1 calls validate_join_policy/1 to check policy format",
+        "compile_join/1 emits [PAR_FORK, BranchLabels, branches with DONE, JOIN_WAIT Policy]",
+        "compile_join/1 validates join policies: all, sync_merge, first_complete, {first_n, N}, {n_of_m, N, M}",
+        "validate_join_policy/1 throws badarg for invalid policies",
+        "Unit test: compile_loop_count_test() verifies LOOP_CHECK, LOOP_BACK, LOOP_BACK operand is integer",
+        "Unit test: compile_join_first_n_test() verifies PAR_FORK, branches, JOIN_WAIT with policy",
+        "Unit test: validate_join_policy_test() verifies badarg thrown for {n_of_m, 5, 3}",
+        "rebar3 eunit passes loop and join tests"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Loop requires backward jump (LOOP_BACK). Join is par with explicit policy. Both validate policy format before compilation."
+    },
+    {
+      "id": "US-007",
+      "title": "Implement compilation for cancel and mi primitives",
+      "acceptance_criteria": [
+        "compile_term/1 dispatches on {cancel, ScopeId, Body} tuple",
+        "compile_cancel/1 emits [CANCEL_SCOPE {enter, ScopeId}, BodyCode, CANCEL_SCOPE {exit, ScopeId}]",
+        "compile_cancel/1 does NOT use labels (linear execution)",
+        "compile_term/1 dispatches on {mi, Policy, Body} tuple",
+        "compile_mi/1 calls validate_mi_policy/1 to check policy format",
+        "compile_mi/1 emits [MI_SPAWN Policy, BodyCode, DONE, JOIN_WAIT all]",
+        "compile_mi/1 validates mi policies: {fixed, N}, {dynamic, Min, Max}",
+        "validate_mi_policy/1 throws badarg for invalid policies",
+        "Unit test: compile_cancel_test() verifies CANCEL_SCOPE enter/exit opcodes",
+        "Unit test: compile_mi_test() verifies MI_SPAWN, body, DONE, JOIN_WAIT all",
+        "Unit test: validate_mi_policy_test() verifies badarg thrown for invalid policies",
+        "rebar3 eunit passes cancel and mi tests"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Cancel is linear (no labels). Mi spawns instances then joins. Both validate policy format."
+    },
+    {
+      "id": "US-008",
+      "title": "Implement defer compilation stub",
+      "acceptance_criteria": [
+        "compile_term/1 dispatches on {defer, Alternatives} tuple",
+        "compile_defer/1 returns {error, {not_implemented, defer}}",
+        "compile_defer/1 documents that defer is not in spec (item.json:6)",
+        "compile_defer/1 documents that defer may be implemented in future as xor with runtime semantics",
+        "Unit test: compile_defer_test() verifies {error, {not_implemented, defer}} returned",
+        "rebar3 eunit passes defer test"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "Defer opcode not in spec. Omit in v1. May compile to xor in future with runtime handling of external events."
+    },
+    {
+      "id": "US-009",
+      "title": "Create comprehensive test suite for compiler",
+      "acceptance_criteria": [
+        "test/wf_compile_tests.erl module exists and compiles",
+        "Unit tests for all 8 implemented primitives (task, seq, par, xor, join, loop, cancel, mi)",
+        "Unit tests for label resolution (unique labels, map building, replacement, removal)",
+        "Unit tests for validation (branch counts, policy formats)",
+        "Integration tests for nested patterns (seq(par), par(seq), loop(par), cancel(xor))",
+        "Integration test for complex nested workflow (3+ levels deep)",
+        "Property-based tests for label resolution correctness",
+        "Test for compiler entry point compile/1 error handling",
+        "Mock task metadata helper function for tests",
+        "rebar3 eunit passes all tests (100% success rate)",
+        "Code coverage > 90% for wf_compile.erl",
+        "Code coverage > 90% for wf_vm.erl"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "Tests must verify correctness of compilation, label resolution, and validation. Property-based tests ensure label resolution works for arbitrary workflows."
+    },
+    {
+      "id": "US-010",
+      "title": "Add comprehensive module and function documentation",
+      "acceptance_criteria": [
+        "wf_vm.erl has complete -moduledoc explaining bytecode format and design decisions",
+        "wf_vm.erl has -type documentation for all exported types with references to specs",
+        "wf_compile.erl has complete -moduledoc explaining compilation pipeline and label management",
+        "wf_compile.erl has -moduledoc with example compilation (seq(par([a, b]), c))",
+        "All exported functions have -spec declarations",
+        "All exported functions have -doc comments with examples where applicable",
+        "compile/1 documentation explains error handling strategy",
+        "Module docs reference ARCHITECTURE.md and PROMPT.md specifications",
+        "Documentation explains defer is not implemented and why",
+        "rebar3 compile succeeds with documentation enabled",
+        "Documentation is clear enough for new developers to understand compilation process"
+      ],
+      "priority": 4,
+      "status": "pending",
+      "notes": "Documentation is critical for maintainability. Must explain design decisions (make_ref labels, two-pass compilation, defer omission)."
+    },
+    {
+      "id": "US-011",
+      "title": "Final verification and integration testing",
+      "acceptance_criteria": [
+        "rebar3 compile succeeds with zero warnings",
+        "rebar3 dialyzer passes with no type errors",
+        "rebar3 xref shows no undefined function calls",
+        "rebar3 eunit passes all tests (100% success rate, 0 failures)",
+        "Code coverage > 90% for wf_compile.erl and wf_vm.erl",
+        "Manual inspection of bytecode matches ARCHITECTURE.md:507-589 example",
+        "Label resolution verified for workflow with 10+ labels",
+        "Nested loop test (loop within loop) verifies LOOP_BACK targets correct label",
+        "All 9 kernel primitives compile correctly (defer returns not_implemented)",
+        "Compiler handles deeply nested structures (3+ levels) correctly",
+        "wf_substrate.app.src includes wf_vm and wf_compile in modules list",
+        "No circular dependencies between modules",
+        "Compiler depends only on wf_term (types) and wf_vm (types)",
+        "All error messages are descriptive and structured"
+      ],
+      "priority": 4,
+      "status": "pending",
+      "notes": "Final phase ensures production-ready compiler. All verification passes, documentation complete, no regressions."
+    }
+  ]
+}

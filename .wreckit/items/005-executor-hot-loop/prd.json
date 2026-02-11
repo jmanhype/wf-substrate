@@ -98,7 +98,7 @@
         "rebar3 dialyzer passes with no type errors"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Loop support adds structured cycles. LOOP_CHECK evaluates condition. LOOP_BACK jumps to loop head. Three loop policies supported: count, while, until."
     },
     {
@@ -122,7 +122,7 @@
         "rebar3 dialyzer passes with no type errors"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Cancellation support adds scope management. CANCEL_SCOPE enter/exit opcodes push/pop scope_stack. Stub wf_cancel integration (real implementation in item 008)."
     },
     {
@@ -149,7 +149,7 @@
         "rebar3 dialyzer passes with no type errors"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Effect yield support allows tasks to request external operations (HTTP calls, file I/O, etc.). Executor yields to wf_effect manager (item 010). Stub for now."
     },
     {
@@ -173,7 +173,7 @@
         "rebar3 dialyzer passes with no type errors"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Scheduler integration enables deterministic and nondeterministic execution. wf_sched module (item 007) provides policies. Stub implementation for now."
     },
     {
@@ -199,7 +199,7 @@
         "rebar3 dialyzer passes with no type errors"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Tracing integration enables observability and replay. wf_trace module (item 011) emits trace events. Stub implementation for now."
     },
     {
@@ -220,7 +220,7 @@
         "Manual testing steps completed (inspect trace logs, profile performance, test under load)"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Comprehensive testing validates all executor functionality. Unit tests for each opcode handler. Integration tests for complete workflows. Property-based tests for invariants. Edge case tests for corner cases."
     }
   ]

@@ -2,12 +2,12 @@
   "schema_version": 1,
   "id": "002-pattern-term-algebra",
   "title": "Implement pattern term algebra and derived patterns",
-  "state": "idea",
+  "state": "researched",
   "overview": "Implement wf_term.erl: the closed pattern algebra AST with constructors: task/2 (named task with metadata), seq/2 (sequential composition), par/1 (parallel split, list of branches), xor/1 (exclusive choice, list of branches), join/2 (synchronization with policy), loop/2 (structured loop with condition and body), defer/1 (deferred/lazy evaluation), cancel/2 (cancel scope with region and body), mi/2 (multiple instances with config). Include full -type and -spec declarations for every constructor and the wf_term() union type. Provide smart constructors that validate structural invariants (e.g., par requires at least 2 branches, join policy is valid). Implement structural validation: well_formed/1 that checks nesting rules, no orphan joins, cancel scopes are properly nested.\n\nAlso implement wf_core.erl with derived/composite patterns built from the kernel primitives: simple_merge (xor converging to single continuation), synchronizing_merge (par branches converging with full sync), discriminator (par with first-complete join that cancels remaining), n_out_of_m (par with wait-n join policy). Each derived pattern is a function that returns a wf_term().",
   "branch": null,
   "pr_url": null,
   "pr_number": null,
-  "last_error": null,
+  "last_error": "Plan phase detected unauthorized file modifications:\n\n  Untracked .wreckit/items/002-pattern-term-algebra/.wreckit-plan-summary.md\n\nThe plan phase must be design-only. Only plan.md and prd.json may be created.\nAny code changes should be made during the implementation phase.",
   "created_at": "2026-02-10T00:00:00.000Z",
-  "updated_at": "2026-02-10T00:00:00.000Z"
+  "updated_at": "2026-02-11T03:23:39.580Z"
 }

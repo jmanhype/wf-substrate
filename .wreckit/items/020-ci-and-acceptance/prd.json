@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "id": "020-ci-and-acceptance",
+  "branch_name": "wreckit/020-ci-and-acceptance",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Create GitHub Actions CI workflow",
+      "acceptance_criteria": [
+        "Workflow file exists at .github/workflows/ci.yml",
+        "Workflow triggers on push to main and wreckit/* branches",
+        "Workflow triggers on pull requests to main and wreckit/* branches",
+        "Compile step runs 'rebar3 compile' and fails on warnings (warnings_as_errors)",
+        "EUnit test step runs 'rebar3 eunit' and fails on any test failure",
+        "Dialyzer step runs 'rebar3 dialyzer' and reports type warnings",
+        "Acceptance test step executes acceptance runner",
+        "Workflow uses ubuntu-latest with Erlang/OTP 26+",
+        "Workflow provides clear pass/fail status in GitHub UI"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Use erlef/setup-beam@v1 action for Erlang setup. Consider adding Dialyzer PLT caching if build times are slow."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement acceptance test runner structure",
+      "acceptance_criteria": [
+        "File exists at src/wf_acceptance.erl with escript shebang",
+        "Module exports main/1 function for escript entry point",
+        "main/1 executes all 7 acceptance criteria checks",
+        "main/1 prints formatted summary report with criterion name and status",
+        "Summary report uses ANSI colors (green PASS, yellow SKIP, red FAIL)",
+        "main/1 exits with code 0 if all checks pass or skip",
+        "main/1 exits with code 1 if any check fails",
+        "escript src/wf_acceptance.erl executes from project root",
+        "Execution completes in < 5 seconds with stubbed checks"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Use escript format (not shell script) for consistency with Erlang codebase. Include -mode(compile). directive for performance."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement unit tests acceptance criterion",
+      "acceptance_criteria": [
+        "check_unit_tests/0 function executes 'rebar3 eunit' via os:cmd/1",
+        "Function parses output for 'All N tests passed' pattern",
+        "Function returns pass atom if tests pass",
+        "Function returns fail atom if tests fail or error occurs",
+        "On pass, prints 'PASS: N tests passed' with actual count",
+        "On fail, prints 'FAIL: Unit tests failed' with error output",
+        "Criterion runs in < 30 seconds"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Use os:cmd/1 instead of spawning Erlang processes for simplicity. Parse test count for informative output. Handle rebar3 output format variations."
+    },
+    {
+      "id": "US-004",
+      "title": "Implement deadlock detection acceptance criterion",
+      "acceptance_criteria": [
+        "check_deadlock_detection/0 creates known-deadlocked bytecode",
+        "Bytecode uses PAR_FORK without proper JOIN_WAIT (from wf_validate_tests.erl:24-31)",
+        "Function calls wf_validate:validate/1 on deadlocked bytecode",
+        "Function checks validation result for deadlock issues",
+        "Function returns pass atom if deadlock detected",
+        "Function returns fail atom if deadlock not detected",
+        "On pass, prints 'PASS: Deadlock correctly detected (N issue(s))'",
+        "On fail, prints 'FAIL: Deadlock not detected'",
+        "Criterion runs in < 2 seconds"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Use wf_validate:validate/1 or wf_validate:check_deadlock/1 directly. Inspect #issue.type field for deadlock type. Handle validation errors gracefully."
+    },
+    {
+      "id": "US-005",
+      "title": "Implement cancellation correctness acceptance criterion (SKIP)",
+      "acceptance_criteria": [
+        "check_cancellation/0 returns skip atom",
+        "Function prints 'SKIP: Cancellation implementation stubbed'",
+        "Print message references wf_exec.erl:514-518",
+        "Criterion runs in < 1 second",
+        "No test execution or validation attempted"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Cancellation is stubbed in wf_exec.erl (is_scope_cancelled/2 always returns false). This criterion should skip until item 008 is implemented. Clear documentation of technical debt."
+    },
+    {
+      "id": "US-006",
+      "title": "Implement determinism acceptance criterion",
+      "acceptance_criteria": [
+        "check_determinism/0 creates simple sequential workflow bytecode",
+        "Function runs workflow twice with deterministic scheduler",
+        "Function uses wf_test_trace_helpers:run_with_trace/3 for execution",
+        "Function compares traces using wf_test_trace_helpers:compare_traces/2",
+        "Function returns pass atom if traces are identical",
+        "Function returns fail atom if traces differ",
+        "On pass, prints 'PASS: Traces are identical (N events)'",
+        "On fail, prints 'FAIL: Traces differ' with diff details",
+        "Function catches and reports exceptions",
+        "Criterion runs in < 5 seconds"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Use workflow from wf_test_determinism.erl:11-15 as reference. Pattern: SEQ_ENTER, TASK_EXEC, SEQ_NEXT, TASK_EXEC, DONE. Handle trace comparison errors gracefully."
+    },
+    {
+      "id": "US-007",
+      "title": "Implement replay acceptance criterion (SKIP)",
+      "acceptance_criteria": [
+        "check_replay/0 returns skip atom",
+        "Function prints 'SKIP: Replay scheduler not integrated'",
+        "Print message references wf_test_replay.erl:14-63",
+        "Criterion runs in < 1 second",
+        "No test execution or validation attempted"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Replay tests in wf_test_replay.erl are all skipped with 'Pending scheduler integration in wf_exec:run/3'. This criterion should skip until scheduler integration is complete."
+    },
+    {
+      "id": "US-008",
+      "title": "Implement benchmarks acceptance criterion",
+      "acceptance_criteria": [
+        "check_benchmarks/0 calls wf_bench:run_all/0",
+        "Function returns pass atom if benchmarks complete (ok returned)",
+        "Function returns fail atom if benchmarks throw exception",
+        "On pass, prints 'PASS: Benchmarks completed'",
+        "On fail, prints 'FAIL: Benchmark error' with exception details",
+        "Function catches exceptions and reports type/error/stack",
+        "Criterion runs in < 60 seconds",
+        "Benchmark table output is printed to stdout"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "wf_bench:run_all/0 prints table to stdout and returns ok. Some benchmarks return 0 steps (stubbed), this is OK. Only verify completion, not results. If benchmarks take too long, consider timeout or running subset."
+    },
+    {
+      "id": "US-009",
+      "title": "Implement documentation completeness acceptance criterion",
+      "acceptance_criteria": [
+        "check_documentation/0 checks for 5 required documentation files",
+        "Required files: docs/ARCHITECTURE.md, docs/SEMANTICS.md, docs/PATTERNS.md, docs/TESTING.md, docs/OPERATIONS.md",
+        "Function checks file exists using filelib:is_file/1",
+        "Function checks file size > 0 using file:read_file_info/1",
+        "Function prints checkmark (✓) for existing non-empty files with size",
+        "Function prints cross (✗) for missing or empty files",
+        "Function returns pass atom if all files exist and non-empty",
+        "Function returns fail atom if any file missing or empty",
+        "On fail, prints 'FAIL: N documentation file(s) missing or empty'",
+        "Criterion runs in < 1 second"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "ARCHITECTURE.md and SEMANTICS.md are currently missing, so this criterion will FAIL initially. This is intentional to track technical debt visibly. Failing docs should block CI until created."
+    },
+    {
+      "id": "US-010",
+      "title": "Create shell script wrapper for acceptance tests",
+      "acceptance_criteria": [
+        "Shell script exists at scripts/acceptance.sh",
+        "Script has executable permissions (chmod +x)",
+        "Script changes directory to project root",
+        "Script executes escript src/wf_acceptance.erl with all arguments",
+        "Script can be called as ./scripts/acceptance.sh from project root",
+        "Script produces identical output to direct escript call"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Convenience wrapper for local testing. Makes acceptance tests easier to run and remember. Set executable permissions in git (git add --chmod=+x scripts/acceptance.sh)."
+    },
+    {
+      "id": "US-011",
+      "title": "Integrate acceptance runner into CI pipeline",
+      "acceptance_criteria": [
+        "GitHub Actions workflow calls acceptance runner",
+        "Acceptance test step uses 'escript src/wf_acceptance.erl'",
+        "Step runs after compile, EUnit, and Dialyzer steps",
+        "CI fails if acceptance runner exits with code 1",
+        "CI passes if acceptance runner exits with code 0",
+        "CI logs show colored acceptance test summary",
+        "CI status badge reflects acceptance test result"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Acceptance runner is final validation step. If documentation is missing, CI will fail. This is intentional - creates external pressure to complete docs."
+    },
+    {
+      "id": "US-012",
+      "title": "Test acceptance runner failure scenarios",
+      "acceptance_criteria": [
+        "Verify unit test criterion fails when EUnit tests fail",
+        "Verify deadlock criterion fails when validation doesn't detect deadlock",
+        "Verify determinism criterion fails when traces differ",
+        "Verify benchmarks criterion fails when wf_bench throws exception",
+        "Verify documentation criterion fails when docs missing",
+        "Verify acceptance runner exits code 1 on any failure",
+        "Verify acceptance runner exits code 0 when all pass/skip",
+        "Test each failure scenario independently",
+        "Test combined failure scenarios (multiple criteria fail)"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Write temporary test cases or manually induce failures to verify error handling. Important for confidence in CI results."
+    },
+    {
+      "id": "US-013",
+      "title": "Add Dialyzer PLT caching to CI workflow",
+      "acceptance_criteria": [
+        "GitHub Actions workflow caches Dialyzer PLT",
+        "Cache key includes Erlang version and rebar.config hash",
+        "Cache restored on workflow start",
+        "Cache saved on workflow completion",
+        "Dialyzer step uses cached PLT (faster builds)",
+        "Cache invalidates when dependencies change"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Dialyzer PLT can take 2-5 minutes to build. Caching significantly speeds up CI. Use actions/cache@v3 action. Key format: dialyzer-${{ runner.os }}-${{ otp-version }}-${{ hashFiles('rebar.config') }}"
+    }
+  ]
+}

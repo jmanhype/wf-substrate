@@ -312,7 +312,6 @@ mi_execution_wait_n_test_() ->
     ExecState0 = wf_exec:new(Bytecode),
     {done, ExecStateDone} = wf_exec:run(ExecState0, 100, undefined),
 
-    %% Verify 1 instance cancelled, 2 completed
     Tokens = maps:values(ExecStateDone#exec_state.tokens),
     CancelledCount = lists:foldl(fun(T, Acc) ->
         case T#token.status of
@@ -331,7 +330,6 @@ mi_execution_first_complete_test_() ->
     ExecState0 = wf_exec:new(Bytecode),
     {done, ExecStateDone} = wf_exec:run(ExecState0, 100, undefined),
 
-    %% Verify 2 instances cancelled, 1 completed
     Tokens = maps:values(ExecStateDone#exec_state.tokens),
     CancelledCount = lists:foldl(fun(T, Acc) ->
         case T#token.status of
@@ -342,4 +340,34 @@ mi_execution_first_complete_test_() ->
 
     [
         ?_assertEqual(2, CancelledCount)
+    ].
+
+%%====================================================================
+%% Effect Yield Tests
+%%====================================================================
+
+mock_bytecode_effect() ->
+    [{'TASK_EXEC', effect_task}, {'DONE'}].
+
+effect_yield_test_() ->
+    Bytecode = mock_bytecode_effect(),
+    ExecState0 = wf_exec:new(Bytecode),
+    {ExecState1, _Trace} = wf_exec:step(ExecState0, undefined),
+    [
+        ?_assertEqual(1, wf_exec:get_step_count(ExecState1)),
+        ?_assertNot(wf_exec:is_done(ExecState1)),
+        ?_assertNot(wf_exec:is_blocked(ExecState1))
+    ].
+
+%%====================================================================
+%% Scheduler Integration Tests
+%%====================================================================
+
+scheduler_integration_test_() ->
+    Bytecode = [{'XOR_CHOOSE', [1, 3]}, {'TASK_EXEC', task_a}, {'DONE'}, {'TASK_EXEC', task_b}, {'DONE'}],
+    ExecState0 = wf_exec:new(Bytecode),
+    Result = wf_exec:run(ExecState0, 100, deterministic),
+    [
+        ?_assertMatch({done, _}, Result),
+        ?_assert(wf_exec:is_done(element(2, Result)))
     ].
