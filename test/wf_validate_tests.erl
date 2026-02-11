@@ -16,36 +16,36 @@
 %% Simple valid workflow: TASK_EXEC -> DONE
 mock_bytecode_simple() ->
     [
-        {task_exec, task},
-        {done}
+        {'TASK_EXEC', task},
+        {'DONE'}
     ].
 
 %% Workflow with deadlock: PAR_FORK without JOIN_WAIT
 mock_bytecode_deadlock() ->
     [
-        {par_fork, [2, 4]},
-        {task_exec, a},
-        {done},
-        {task_exec, b},
-        {done}
+        {'PAR_FORK', [2, 4]},
+        {'TASK_EXEC', a},
+        {'DONE'},
+        {'TASK_EXEC', b},
+        {'DONE'}
     ].
 
 %% Workflow with unreachable code
 mock_bytecode_unreachable() ->
     [
-        {task_exec, task1},
-        {done},
-        {task_exec, unreachable_task},  %% After DONE, unreachable
-        {done}
+        {'TASK_EXEC', task1},
+        {'DONE'},
+        {'TASK_EXEC', unreachable_task},  %% After DONE, unreachable
+        {'DONE'}
     ].
 
 %% Sequential workflow
 mock_bytecode_seq() ->
     [
-        {task_exec, task1},
-        {seq_next, 3},
-        {task_exec, task2},
-        {done}
+        {'TASK_EXEC', task1},
+        {'SEQ_NEXT', 3},
+        {'TASK_EXEC', task2},
+        {'DONE'}
     ].
 
 %%====================================================================
@@ -75,7 +75,7 @@ to_petri_net_returns_state_and_metadata_test() ->
 
     ?assert(is_record(State, validation_state)),
     ?assertEqual(2, maps:get(bytecode_length, Metadata)),
-    ?assertMatch(#{task_exec := 1, 'DONE' := 1}, maps:get(transition_counts, Metadata)).
+    ?assertMatch(#{'TASK_EXEC' := 1, 'DONE' := 1}, maps:get(transition_counts, Metadata)).
 
 %%====================================================================
 %% Tests: Phase 2 - Exploration Engine
@@ -113,7 +113,7 @@ fire_transition_task_exec_test() ->
     ?assertEqual(1, State1#validation_state.step_count).
 
 fire_transition_done_test() ->
-    Bytecode = [{done}],
+    Bytecode = [{'DONE'}],
     State0 = wf_validate:new(Bytecode),
     TokenId = hd(maps:keys(State0#validation_state.tokens)),
 
