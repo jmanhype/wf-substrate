@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "044-wfexecintegrationtests-multiple-integration-test-f",
+  "title": "wf_exec_integration_tests (multiple): integration test failures",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T21:01:46.690Z",
+  "updated_at": "2026-02-11T21:01:46.690Z"
+}

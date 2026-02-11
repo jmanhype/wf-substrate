@@ -76,10 +76,6 @@ start_case(CaseId, Bytecode, Options) ->
 
 %% @private
 init([]) ->
-    SupFlags = #{
-        strategy => simple_one_for_one,
-        intensity => 10,
-        period => 60
-    },
+    SupFlags = {simple_one_for_one, 10, 60},
     ChildSpecs = [],  %% Empty for simple_one_for_one
     {ok, {SupFlags, ChildSpecs}}.

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "042-wfsubstrateapitests-6-failures-otp-app-setup-failu",
+  "title": "wf_substrate_api_tests (6 failures): OTP app setup failures",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T21:01:46.690Z",
+  "updated_at": "2026-02-11T21:01:46.690Z"
+}

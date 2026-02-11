@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "037-wfstatetests-10-failures-buffermutation-commit-rol",
+  "title": "wf_state_tests (10 failures): buffer_mutation, commit, rollback, snapshot_restore, multiple_mutations, step_count — the wf_state API changed to ETS-based but tests still expect the old API",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T21:01:46.689Z",
+  "updated_at": "2026-02-11T21:01:46.689Z"
+}
