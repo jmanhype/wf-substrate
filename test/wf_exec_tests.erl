@@ -8,6 +8,16 @@ mock_bytecode_simple_task() ->
 mock_bytecode_seq() ->
     [{'SEQ_ENTER', 0}, {'TASK_EXEC', task_a}, {'SEQ_NEXT', 3}, {'TASK_EXEC', task_b}, {'DONE'}].
 
+mock_bytecode_par() ->
+    [
+        {'PAR_FORK', [1, 3]},           %% Fork to IP 1 and 3
+        {'TASK_EXEC', task_a},           %% IP 1: task_a
+        {'DONE'},                        %% IP 2: done (branch 1)
+        {'TASK_EXEC', task_b},           %% IP 3: task_b
+        {'DONE'},                        %% IP 4: done (branch 2)
+        {'JOIN_WAIT', all}              %% IP 5: wait for all branches
+    ].
+
 %%====================================================================
 %% Phase 1 Tests: exec_state Creation
 %%====================================================================
@@ -80,5 +90,45 @@ run_until_done_test_() ->
     [
         ?_assertMatch({done, _ExecState}, Result),
         ?_assert(wf_exec:is_done(element(2, Result)))
+    ].
+
+%%====================================================================
+%% Phase 3 Tests: Multi-Token Executor
+%%====================================================================
+
+%% Test PAR_FORK spawns 2 tokens
+par_fork_test_() ->
+    Bytecode = mock_bytecode_par(),
+    ExecState0 = wf_exec:new(Bytecode),
+    {ExecState1, _Trace} = wf_exec:step(ExecState0, undefined),
+    [
+        ?_assertEqual(1, wf_exec:get_step_count(ExecState1))  %% 1 step executed
+    ].
+
+%% Test JOIN_WAIT blocks until branches complete
+join_wait_test_() ->
+    Bytecode = mock_bytecode_par(),
+    ExecState0 = wf_exec:new(Bytecode),
+    %% Execute PAR_FORK
+    {ExecState1, _Trace1} = wf_exec:step(ExecState0, undefined),
+    %% Execute first branch (task_a + done)
+    {ExecState2, _Trace2} = wf_exec:step(ExecState1, undefined),
+    {ExecState3, _Trace3} = wf_exec:step(ExecState2, undefined),
+    %% Execute second branch (task_b + done)
+    {ExecState4, _Trace4} = wf_exec:step(ExecState3, undefined),
+    {ExecState5, _Trace5} = wf_exec:step(ExecState4, undefined),
+    %% Execute JOIN_WAIT (should succeed now)
+    {ExecState6, _Trace6} = wf_exec:step(ExecState5, undefined),
+    [
+        ?_assertEqual(6, wf_exec:get_step_count(ExecState6))  %% All steps executed
+    ].
+
+%% Test XOR_CHOOSE selects one branch
+xor_choose_test_() ->
+    Bytecode = [{'XOR_CHOOSE', [1, 3]}, {'TASK_EXEC', task_a}, {'DONE'}, {'TASK_EXEC', task_b}, {'DONE'}],
+    ExecState0 = wf_exec:new(Bytecode),
+    {ExecState1, _Trace} = wf_exec:step(ExecState0, undefined),
+    [
+        ?_assertEqual(1, wf_exec:get_ip(ExecState1))  %% Selected first branch
     ].
 

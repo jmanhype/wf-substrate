@@ -176,6 +176,12 @@ execute_opcode({SeqEnter, _Arg}, ExecState) when SeqEnter =:= 'SEQ_ENTER'; SeqEn
     execute_seq_enter({SeqEnter, _Arg}, ExecState);
 execute_opcode({SeqNext, TargetIP}, ExecState) when SeqNext =:= 'SEQ_NEXT'; SeqNext =:= seq_next ->
     execute_seq_next({SeqNext, TargetIP}, ExecState);
+execute_opcode({ParFork, Targets}, ExecState) when ParFork =:= 'PAR_FORK'; ParFork =:= par_fork ->
+    execute_par_fork({ParFork, Targets}, ExecState);
+execute_opcode({JoinWait, _Policy}, ExecState) when JoinWait =:= 'JOIN_WAIT'; JoinWait =:= join_wait ->
+    execute_join_wait({JoinWait, _Policy}, ExecState);
+execute_opcode({XorChoose, Targets}, ExecState) when XorChoose =:= 'XOR_CHOOSE'; XorChoose =:= xor_choose ->
+    execute_xor_choose({XorChoose, Targets}, ExecState, undefined);
 execute_opcode({TaskExec, _TaskName}, ExecState) when TaskExec =:= 'TASK_EXEC'; TaskExec =:= task_exec ->
     execute_task_exec({TaskExec, _TaskName}, ExecState);
 execute_opcode({Done}, ExecState) when Done =:= 'DONE'; Done =:= done ->
@@ -214,6 +220,183 @@ execute_task_exec({_TaskExec, _TaskName}, ExecState) ->
         step_count = ExecState#exec_state.step_count + 1
     }.
 
+%% @doc Get current scope from scope_stack
+-spec get_current_scope(exec_state()) -> term().
+get_current_scope(#exec_state{scope_stack = [ScopeId | _]}) ->
+    ScopeId.
+
+%% @doc Select next token to execute (deterministic: first active token)
+-spec select_next_token(#{term() => #token{}}) -> term() | undefined.
+select_next_token(TokensMap) ->
+    ActiveTokens = [T || T <- maps:values(TokensMap), T#token.status =:= active],
+    case ActiveTokens of
+        [] -> undefined;
+        [First | _] -> First#token.token_id
+    end.
+
+%%====================================================================
+%% Multi-Token Opcodes
+%%====================================================================
+
+%% @doc Execute PAR_FORK: spawn N tokens, track in branch_map
+execute_par_fork({_ParFork, TargetIPs}, ExecState) ->
+    BranchId = make_ref(),
+    JoinId = make_ref(),
+    NumBranches = length(TargetIPs),
+
+    %% Spawn N tokens
+    CurrentToken = ExecState#exec_state.current_token,
+    ScopeId = get_current_scope(ExecState),
+    NewTokens = lists:map(fun(IP) ->
+        TokenId = make_ref(),
+        Token = #token{
+            token_id = TokenId,
+            ip = IP,
+            scope_id = ScopeId,
+            value = undefined,
+            status = active
+        },
+        {TokenId, Token}
+    end, TargetIPs),
+
+    %% Add tokens to state
+    TokensMap0 = ExecState#exec_state.tokens,
+    TokensMap = lists:foldl(fun({TokenId, Token}, Acc) ->
+        maps:put(TokenId, Token, Acc)
+    end, TokensMap0, NewTokens),
+
+    %% Create branch info
+    BranchInfo = #branch_info{
+        branch_id = BranchId,
+        tokens = [TokenId || {TokenId, _Token} <- NewTokens],
+        join_id = JoinId,
+        targets = TargetIPs
+    },
+    BranchMap0 = ExecState#exec_state.branch_map,
+    BranchMap = maps:put(BranchId, BranchInfo, BranchMap0),
+
+    %% Create join counter
+    JoinCounter = #join_counter{
+        join_id = JoinId,
+        completed = 0,
+        required = NumBranches,
+        policy = all,
+        results = []
+    },
+    JoinCounters0 = ExecState#exec_state.join_counters,
+    JoinCounters = maps:put(JoinId, JoinCounter, JoinCounters0),
+
+    %% Mark current token as complete (replaced by branch tokens)
+    TokensMapFinal = maps:remove(CurrentToken, TokensMap),
+
+    %% Advance IP (past PAR_FORK instruction)
+    NewIP = ExecState#exec_state.ip + 1,
+
+    %% Select next token to execute
+    NextToken = select_next_token(TokensMapFinal),
+
+    ExecState#exec_state{
+        ip = NewIP,
+        tokens = TokensMapFinal,
+        branch_map = BranchMap,
+        join_counters = JoinCounters,
+        step_count = ExecState#exec_state.step_count + 1,
+        current_token = NextToken
+    }.
+
+%% @doc Execute JOIN_WAIT: check join counter, block if not satisfied
+execute_join_wait({_JoinWait, _Policy}, ExecState) ->
+    %% Find active join (must be exactly one)
+    JoinId = find_active_join(ExecState),
+    JoinCounter = maps:get(JoinId, ExecState#exec_state.join_counters),
+
+    case JoinCounter#join_counter.completed >= JoinCounter#join_counter.required of
+        true ->
+            %% Join satisfied, merge results and continue
+            %% Remove join counter and branch map entry
+            JoinCounters = maps:remove(JoinId, ExecState#exec_state.join_counters),
+            BranchMap = remove_branch_by_join(JoinId, ExecState#exec_state.branch_map),
+
+            %% Create continuation token with merged results
+            ContinuationTokenId = make_ref(),
+            ContinuationToken = #token{
+                token_id = ContinuationTokenId,
+                ip = ExecState#exec_state.ip + 1,
+                scope_id = get_current_scope(ExecState),
+                value = merge_results(JoinCounter#join_counter.results, all),
+                status = active
+            },
+            Tokens = maps:put(ContinuationTokenId, ContinuationToken, ExecState#exec_state.tokens),
+
+            ExecState#exec_state{
+                ip = ExecState#exec_state.ip + 1,
+                tokens = Tokens,
+                join_counters = JoinCounters,
+                branch_map = BranchMap,
+                step_count = ExecState#exec_state.step_count + 1,
+                current_token = ContinuationTokenId
+            };
+        false ->
+            %% Join not satisfied, block
+            ExecState#exec_state{
+                status = blocked_join,
+                step_count = ExecState#exec_state.step_count + 1
+            }
+    end.
+
+%% @doc Find active join point
+-spec find_active_join(exec_state()) -> term().
+find_active_join(#exec_state{join_counters = JoinCounters}) ->
+    %% For simplicity, return first join_id
+    %% In production, should be exactly one join
+    [JoinId | _] = maps:keys(JoinCounters),
+    JoinId.
+
+%% @doc Remove branch entry by join_id
+-spec remove_branch_by_join(term(), #{term() => #branch_info{}}) -> #{term() => #branch_info{}}.
+remove_branch_by_join(JoinId, BranchMap) ->
+    maps:filter(fun(_BranchId, BranchInfo) ->
+        BranchInfo#branch_info.join_id =/= JoinId
+    end, BranchMap).
+
+%% @doc Merge results from parallel branches
+-spec merge_results([term()], wf_vm:join_policy()) -> term().
+merge_results(Results, all) ->
+    {merged, Results};
+merge_results(Results, {first_n, _N}) ->
+    {merged, Results};
+merge_results(Results, first_complete) ->
+    {first_complete, hd(Results)};
+merge_results(Results, sync_merge) ->
+    {sync_merged, lists:foldl(fun merge_state/2, #{}, Results)}.
+
+%% @doc Merge state maps
+merge_state(StateMap, Acc) ->
+    maps:merge(Acc, StateMap).
+
+%% @doc Execute XOR_CHOOSE: select ONE branch via scheduler decision
+execute_xor_choose({_XorChoose, TargetIPs}, ExecState, _SchedDecision) ->
+    %% Scheduler decision contains selected branch index
+    %% For now, always select first branch (deterministic)
+    SelectedIndex = 1,
+    SelectedIP = lists:nth(SelectedIndex, TargetIPs),
+
+    %% Update current token's IP to selected branch
+    CurrentToken = ExecState#exec_state.current_token,
+    Token = maps:get(CurrentToken, ExecState#exec_state.tokens),
+    UpdatedToken = Token#token{ip = SelectedIP},
+    Tokens = maps:put(CurrentToken, UpdatedToken, ExecState#exec_state.tokens),
+
+    ExecState#exec_state{
+        ip = SelectedIP,
+        tokens = Tokens,
+        step_count = ExecState#exec_state.step_count + 1
+    }.
+
+%%====================================================================
+%% Single-Token Opcodes (continued)
+%%====================================================================
+
 %% @doc Execute DONE: mark token complete, check if executor done
 execute_done(ExecState) ->
     CurrentToken = ExecState#exec_state.current_token,
@@ -221,21 +404,59 @@ execute_done(ExecState) ->
     UpdatedToken = Token#token{status = complete},
     Tokens = maps:put(CurrentToken, UpdatedToken, ExecState#exec_state.tokens),
 
+    %% Increment join counter if part of a parallel branch
+    {UpdatedTokens2, UpdatedJoinCounters} = case find_branch_for_token(CurrentToken, ExecState#exec_state.branch_map) of
+        {ok, BranchId} ->
+            %% Token is part of a parallel branch, increment join counter
+            NewJoinCounters = increment_join_counter(BranchId, ExecState, UpdatedToken#token.value),
+            {Tokens, NewJoinCounters};
+        error ->
+            %% Not part of a parallel branch
+            {Tokens, ExecState#exec_state.join_counters}
+    end,
+
     %% Check if all tokens complete
-    ActiveTokens = [T || T <- maps:values(Tokens), T#token.status =:= active],
+    ActiveTokens = [T || T <- maps:values(UpdatedTokens2), T#token.status =:= active],
     case ActiveTokens of
         [] ->
             %% No active tokens, executor is done
             ExecState#exec_state{
-                tokens = Tokens,
+                tokens = UpdatedTokens2,
+                join_counters = UpdatedJoinCounters,
                 status = done,
                 step_count = ExecState#exec_state.step_count + 1
             };
         _ ->
-            %% Other tokens active (shouldn't happen in single-token executor)
+            %% Other tokens still active, select next token
+            NextToken = select_next_token(UpdatedTokens2),
             ExecState#exec_state{
-                tokens = Tokens,
+                tokens = UpdatedTokens2,
+                join_counters = UpdatedJoinCounters,
+                current_token = NextToken,
                 step_count = ExecState#exec_state.step_count + 1
             }
     end.
+
+%% @doc Find branch for a given token
+-spec find_branch_for_token(term(), #{term() => #branch_info{}}) -> {ok, term()} | error.
+find_branch_for_token(TokenId, BranchMap) ->
+    case [BranchId || {BranchId, #branch_info{tokens = Tokens}} <- maps:to_list(BranchMap),
+                      lists:member(TokenId, Tokens)] of
+        [BranchId | _] -> {ok, BranchId};
+        [] -> error
+    end.
+
+%% @doc Increment join counter when branch completes
+-spec increment_join_counter(term(), exec_state(), term()) -> #{term() => #join_counter{}}.
+increment_join_counter(BranchId, ExecState, ResultValue) ->
+    BranchInfo = maps:get(BranchId, ExecState#exec_state.branch_map),
+    JoinId = BranchInfo#branch_info.join_id,
+
+    %% Update join counter
+    JoinCounter = maps:get(JoinId, ExecState#exec_state.join_counters),
+    UpdatedJoinCounter = JoinCounter#join_counter{
+        completed = JoinCounter#join_counter.completed + 1,
+        results = [ResultValue | JoinCounter#join_counter.results]
+    },
+    maps:put(JoinId, UpdatedJoinCounter, ExecState#exec_state.join_counters).
 
