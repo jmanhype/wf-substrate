@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "id": "022-re-enable-all-33-disabled-test-files-in-test-that-",
+  "branch_name": "wreckit/022-re-enable-all-33-disabled-test-files-in-test-that-",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Fix Include Path Infrastructure",
+      "acceptance_criteria": [
+        "Add {i, \"include\"} to rebar.config test profile erl_opts",
+        "Verify all header files (wf_exec.hrl, wf_effect.hrl, wf_receipt.hrl, wf_governance.hrl, wf_mi.hrl, wf_validate.hrl, wf_trace.hrl, wf_cancel.hrl, wf_state.hrl) are accessible",
+        "Compile with new profile succeeds: rebar3 compile",
+        "All header files parse without errors"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is infrastructure work that enables all subsequent test fixes. Header files are split between src/ and include/ directories. Adding include/ to test compile path allows tests to use consistent include syntax."
+    },
+    {
+      "id": "US-002",
+      "title": "Move 33 Disabled Test Files to test/ Directory",
+      "acceptance_criteria": [
+        "Copy all 33 files from _build/test/lib/wf_substrate/test/disabled/*.erl.disabled to test/*.erl",
+        "Remove .disabled extension from all files",
+        "Verify file count: ls -1 test/*.erl returns 34 (33 moved + 1 existing)",
+        "All expected test files present in test/ directory"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Batch operation using bash loop. Use copy (not move) to preserve originals in _build/. Verify all files present before proceeding."
+    },
+    {
+      "id": "US-003",
+      "title": "Fix Include Paths in All 33 Test Files",
+      "acceptance_criteria": [
+        "Replace all -include(\"../src/wf_exec.hrl\") with -include(\"wf_exec.hrl\")",
+        "Replace all -include(\"../src/wf_effect.hrl\") with -include(\"wf_effect.hrl\")",
+        "Replace all -include(\"../src/wf_receipt.hrl\") with -include(\"wf_receipt.hrl\")",
+        "Replace all -include(\"../src/wf_governance.hrl\") with -include(\"wf_governance.hrl\")",
+        "Replace all -include(\"../src/wf_mi.hrl\") with -include(\"wf_mi.hrl\")",
+        "Replace all -include(\"../src/wf_validate.hrl\") with -include(\"wf_validate.hrl\")",
+        "Replace all -include(\"../src/wf_trace.hrl\") with -include(\"wf_trace.hrl\")",
+        "Add -include(\"wf_cancel.hrl\") where needed (wf_cancel_tests.erl, wf_test_cancel.erl)",
+        "Add -include(\"wf_state.hrl\") where needed (wf_state_tests.erl, wf_cancel_tests.erl)",
+        "No relative includes remain: grep -r 'include.*\"../src/' test/*.erl returns nothing"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Global search/replace operation. Use sed or similar tool. Verify no relative includes remain before proceeding."
+    },
+    {
+      "id": "US-004",
+      "title": "Fix Opcode Case Mismatch in All Test Files",
+      "acceptance_criteria": [
+        "Replace all {'TASK_EXEC', Task} with {task_exec, Task}",
+        "Replace all {'SEQ_ENTER', N} with {seq_enter, N}",
+        "Replace all {'SEQ_NEXT', IP} with {seq_next, IP}",
+        "Replace all {'PAR_FORK', IPs} with {par_fork, IPs}",
+        "Replace all {'JOIN_WAIT', Policy} with {join_wait, Policy}",
+        "Replace all {'XOR_CHOOSE', IPs} with {xor_choose, IPs}",
+        "Replace all {'LOOP_BACK', IP} with {loop_back, IP}",
+        "Replace all {'LOOP_CHECK', Policy} with {loop_check, Policy}",
+        "Replace all {'CANCEL_SCOPE', Op} with {cancel_scope, Op}",
+        "Replace all {'MI_SPAWN', Policy} with {mi_spawn, Policy}",
+        "Replace all {'DONE'} with {done}",
+        "No uppercase opcodes remain: grep -E \"\\{'[A-Z_]+_[A-Z_]+\\'\" test/*.erl returns nothing"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Global search/replace for all opcodes. Current wf_vm.erl uses lowercase atoms. This affects mock bytecode generation in tests."
+    },
+    {
+      "id": "US-005",
+      "title": "Fix wf_test_helpers Module",
+      "acceptance_criteria": [
+        "Include paths fixed: -include(\"wf_exec.hrl\"), -include(\"wf_trace.hrl\")",
+        "All exported functions defined: exec_until_done/1, exec_steps/2, get_token_statuses/1, count_tokens_with_status/2, assert_join_counter/2",
+        "Module compiles without errors",
+        "Dependent test modules can call helper functions"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "wf_test_helpers is used by all wf_test_*.erl modules. Fix includes and verify exports match function definitions."
+    },
+    {
+      "id": "US-006",
+      "title": "Fix 14 Unit Test Files",
+      "acceptance_criteria": [
+        "wf_exec_tests.erl compiles and tests pass",
+        "wf_term_tests.erl compiles and tests pass",
+        "wf_core_tests.erl compiles and tests pass",
+        "wf_compile_tests.erl compiles and tests pass",
+        "wf_effect_tests.erl compiles and tests pass (replace is_record with ?assertMatch)",
+        "wf_mi_tests.erl compiles and tests pass",
+        "wf_sched_tests.erl compiles and tests pass",
+        "wf_state_tests.erl compiles and tests pass",
+        "wf_governance_tests.erl compiles and tests pass",
+        "wf_cancel_tests.erl compiles and tests pass",
+        "wf_receipt_tests.erl compiles and tests pass",
+        "wf_validate_tests.erl compiles and tests pass",
+        "wf_substrate_api_tests.erl compiles and tests pass",
+        "wf_supervision_tree_tests.erl compiles and tests pass"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Unit tests cover core modules. Most should work after Phases 1-4. Special handling for wf_effect_tests (deprecated is_record syntax)."
+    },
+    {
+      "id": "US-007",
+      "title": "Fix 5 Integration Test Files",
+      "acceptance_criteria": [
+        "wf_case_runner_tests.erl compiles and tests pass",
+        "wf_trace_tests.erl compiles and tests pass",
+        "wf_exec_effect_tests.erl compiles and tests pass",
+        "wf_exec_integration_tests.erl compiles and tests pass",
+        "wf_governance_integration_tests.erl compiles and tests pass"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Integration tests involve gen_server lifecycle. wf_governance_integration_tests already has correct setup/teardown pattern."
+    },
+    {
+      "id": "US-008",
+      "title": "Fix 3 Property Test Files",
+      "acceptance_criteria": [
+        "wf_prop.erl compiles (custom property framework)",
+        "wf_governance_props.erl compiles and tests pass",
+        "wf_effect_props.erl compiles and tests pass",
+        "PropEr include added if using ?FORALL macro"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "wf_prop.erl implements custom property framework (not standard PropEr). Check if wf_governance_props uses PropEr macros and add include_lib if needed."
+    },
+    {
+      "id": "US-009",
+      "title": "Fix 11 Legacy Test Helper Modules (wf_test_*.erl)",
+      "acceptance_criteria": [
+        "wf_test_seq.erl compiles and tests pass",
+        "wf_test_par.erl compiles and tests pass",
+        "wf_test_xor.erl compiles and tests pass",
+        "wf_test_join.erl compiles and tests pass",
+        "wf_test_mi.erl compiles and tests pass",
+        "wf_test_cancel.erl compiles and tests pass",
+        "wf_test_determinism.erl compiles and tests pass",
+        "wf_test_examples.erl compiles and tests pass",
+        "wf_test_receipts.erl compiles and tests pass",
+        "wf_test_replay.erl compiles and tests pass",
+        "wf_test_term.erl compiles and tests pass",
+        "wf_test_trace_helpers.erl compiles and tests pass"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Legacy test patterns rely on wf_test_helpers. Most should work after Phases 3-5. Check for undefined wf_exec:cancel/1 and comment out with TODO."
+    },
+    {
+      "id": "US-010",
+      "title": "Resolve All Compilation Errors",
+      "acceptance_criteria": [
+        "rebar3 compile succeeds with 0 errors",
+        "No undefined function errors",
+        "No undefined record errors",
+        "No syntax errors",
+        "No undefined macro errors"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Catch-all phase for any remaining compilation errors. Fix iteratively: compile, identify error category, fix, recompile. Document TODOs for unimplemented features."
+    },
+    {
+      "id": "US-011",
+      "title": "Run All Tests and Fix Failures",
+      "acceptance_criteria": [
+        "rebar3 eunit succeeds with 0 failures",
+        "All 34 test modules execute",
+        "No assertion errors",
+        "No match errors",
+        "No timeout errors",
+        "No gen_server call errors"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Run full test suite and fix failures. Preserve test intent while fixing. Update assertions if API changed, skip with TODO if feature not implemented."
+    },
+    {
+      "id": "US-012",
+      "title": "Final Verification and Documentation",
+      "acceptance_criteria": [
+        "Test file count is 34: ls -1 test/*.erl | wc -l returns 34",
+        "Clean compilation: rebar3 compile succeeds",
+        "All tests pass: rebar3 eunit succeeds",
+        "No .disabled files in test/",
+        "All TODO comments documented with rationale"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Final verification that all 33 tests are re-enabled and passing. Document remaining work (TODOs, skipped tests) in remaining_work.md."
+    }
+  ]
+}

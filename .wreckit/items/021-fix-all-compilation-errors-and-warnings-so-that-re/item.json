@@ -2,12 +2,14 @@
   "schema_version": 1,
   "id": "021-fix-all-compilation-errors-and-warnings-so-that-re",
   "title": "Fix all compilation errors and warnings so that `rebar3 compile` succeeds with warnings_as_errors enabled, and `rebar3 eunit` passes all tests. The codebase was generated autonomously and has never been compiled — expect escripts in wrong directories, unused variables/types, dead code, missing exports, and possibly broken function arities or missing module references.",
-  "state": "critique",
+  "state": "done",
   "overview": "",
-  "branch": null,
+  "branch": "wreckit/021-fix-all-compilation-errors-and-warnings-so-that-re",
   "pr_url": null,
   "pr_number": null,
   "last_error": null,
   "created_at": "2026-02-11T19:19:01.968Z",
-  "updated_at": "2026-02-11T19:34:25.588Z"
+  "updated_at": "2026-02-11T19:34:27.914Z",
+  "rollback_sha": "71d9d4babc4fab9a92b3a94bb0579f752f8bd45a",
+  "completed_at": "2026-02-11T19:34:27.914Z"
 }
