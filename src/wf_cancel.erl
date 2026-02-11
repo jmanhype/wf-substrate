@@ -146,13 +146,13 @@ do_cancel_activity(State, TaskId) ->
                             %% Cancel effect
                             case cancel_effect(EffectId) of
                                 ok ->
-                                    {ok, cancel_token_and_create_event(State, Token, [EffectId])};
+                                    cancel_token_and_create_event(State, Token, [EffectId]);
                                 {error, Reason} ->
                                     {error, {effect_cancel_failed, Reason}}
                             end;
                         undefined ->
                             %% Task not started, skip
-                            {ok, cancel_token_and_create_event(State, Token, [])}
+                            cancel_token_and_create_event(State, Token, [])
                     end
             end
     end.

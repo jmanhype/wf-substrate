@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "id": "024-fix-runtime-test-failure-in-testwfcanceltestserl-t",
+  "branch_name": "wreckit/024-fix-runtime-test-failure-in-testwfcanceltestserl-t",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Add setup/cleanup functions to wf_cancel_tests.erl",
+      "acceptance_criteria": [
+        "Setup function checks if wf_state gen_server is already running using whereis(wf_state)",
+        "Setup function starts wf_state:start_link() if gen_server not running",
+        "Setup function returns Pid for use by cleanup",
+        "Cleanup function accepts Pid parameter but does not stop gen_server (follows wf_state_tests.erl pattern)",
+        "Functions added after line 12 in wf_cancel_tests.erl, before test helpers",
+        "Code compiles without errors: rebar3 compile succeeds"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Follow exact pattern from wf_state_tests.erl lines 8-19. Setup must be idempotent to handle multiple calls safely."
+    },
+    {
+      "id": "US-002",
+      "title": "Create master test wrapper with setup/teardown",
+      "acceptance_criteria": [
+        "Master test generator named wf_cancel_master_test_/0 added to end of file",
+        "Master wrapper uses {setup, fun setup/0, fun cleanup/1, [...]} EUnit pattern",
+        "All 30 existing test generators wrapped in master setup list",
+        "Each test referenced as fun test_name_test_/0",
+        "Each test has descriptive string label for readable output",
+        "Code compiles without errors: rebar3 compile succeeds"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Wrap all test generators including pure function tests. Simpler than selective wrapping and no harm in extra setup. Reference cancel_region_test_/0 which has its own nested setup - this is allowed in EUnit."
+    },
+    {
+      "id": "US-003",
+      "title": "Verify all tests pass with rebar3 eunit",
+      "acceptance_criteria": [
+        "rebar3 eunit --module wf_cancel_tests executes successfully",
+        "Test output shows 0 failures",
+        "Test output shows 0 cancelled",
+        "No ets:lookup/2 badarg errors in output",
+        "All 30 test names appear in output with descriptive labels",
+        "Tests can be run individually without errors",
+        "Running test suite multiple times produces consistent results"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "This is the verification phase that confirms the fix works. Must check for nested setup compatibility (cancel_region_test_ already has setup wrapper)."
+    }
+  ]
+}

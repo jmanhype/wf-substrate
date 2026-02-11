@@ -347,9 +347,6 @@ commit(State) ->
                 AppliedState = apply_mutations(Mutations, State),
                 StateAfter = hash_state(AppliedState),
 
-                %% Persist to ETS
-                ets:insert(wf_state_store, AppliedState),
-
                 %% Create receipt
                 Receipt = #receipt{
                     receipt_id = make_ref(),
@@ -369,6 +366,9 @@ commit(State) ->
                     buffered_mutations = [],
                     metadata = UpdatedMetadata
                 },
+
+                %% Persist to ETS (persist FinalState with cleared buffer)
+                ets:insert(wf_state_store, FinalState),
 
                 {ok, FinalState, Receipt}
             catch
@@ -539,11 +539,39 @@ apply_single_mutation(#mutation{type = {update_ctx, UpdateFun}}, State)
 
 apply_single_mutation(#mutation{type = {add_token, TokenId, Token}}, State) ->
     Tokens = State#state.tokens,
-    State#state{tokens = Tokens#{TokenId => Token}};
+    NewState = State#state{tokens = Tokens#{TokenId => Token}},
+    %% Add token to scope's token list (if scope exists)
+    ScopeId = Token#token.scope_id,
+    Scopes = State#state.scopes,
+    case maps:is_key(ScopeId, Scopes) of
+        true ->
+            Scope = maps:get(ScopeId, Scopes),
+            UpdatedScope = Scope#scope{tokens = [TokenId | Scope#scope.tokens]},
+            NewState#state{scopes = Scopes#{ScopeId => UpdatedScope}};
+        false ->
+            %% Scope doesn't exist yet (will be entered later)
+            NewState
+    end;
 
 apply_single_mutation(#mutation{type = {remove_token, TokenId}}, State) ->
     Tokens = State#state.tokens,
-    State#state{tokens = maps:remove(TokenId, Tokens)};
+    %% Remove token from scope's token list (if scope exists)
+    NewState = State#state{tokens = maps:remove(TokenId, Tokens)},
+    case maps:get(TokenId, Tokens, undefined) of
+        undefined ->
+            NewState;
+        Token ->
+            ScopeId = Token#token.scope_id,
+            Scopes = State#state.scopes,
+            case maps:is_key(ScopeId, Scopes) of
+                true ->
+                    Scope = maps:get(ScopeId, Scopes),
+                    UpdatedScope = Scope#scope{tokens = lists:delete(TokenId, Scope#scope.tokens)},
+                    NewState#state{scopes = Scopes#{ScopeId => UpdatedScope}};
+                false ->
+                    NewState
+            end
+    end;
 
 apply_single_mutation(#mutation{type = {update_token, TokenId, UpdateFun}}, State)
   when is_function(UpdateFun, 1) ->
@@ -554,11 +582,15 @@ apply_single_mutation(#mutation{type = {update_token, TokenId, UpdateFun}}, Stat
 
 apply_single_mutation(#mutation{type = {enter_scope, ScopeId, ParentScope}}, State) ->
     Scopes = State#state.scopes,
+    Tokens = State#state.tokens,
+    %% Find all tokens in this scope
+    TokensInScope = [TokenId || {TokenId, Token} <- maps:to_list(Tokens),
+                                 Token#token.scope_id =:= ScopeId],
     NewScope = #scope{
         scope_id = ScopeId,
         parent_scope = ParentScope,
         status = active,
-        tokens = [],
+        tokens = TokensInScope,
         entered_at = erlang:timestamp()
     },
     State#state{scopes = Scopes#{ScopeId => NewScope}};
