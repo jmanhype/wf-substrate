@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "id": "023-fix-compilation-error-in-testwftestjoinerl-variabl",
+  "branch_name": "wreckit/023-fix-compilation-error-in-testwftestjoinerl-variabl",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Fix variable naming mismatch on lines 67, 78 in join_wait_all tests",
+      "acceptance_criteria": [
+        "Change `_Tokens` to `Tokens` on line 67 in join_wait_all_3_test()",
+        "Change `_Tokens` to `Tokens` on line 78 in join_wait_all_5_test()",
+        "Variables match the pattern used in test/wf_test_par.erl",
+        "Compilation succeeds without 'variable Tokens is unbound' errors"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "These tests verify wait_all policy where all M branches complete. Lines 67-68 and 78-79 bind _Tokens but use Tokens on the next line."
+    },
+    {
+      "id": "US-002",
+      "title": "Fix variable naming mismatch on line 94 in join_wait_n_2_of_3_test",
+      "acceptance_criteria": [
+        "Change `_Tokens` to `Tokens` on line 94 in join_wait_n_2_of_3_test()",
+        "Variable correctly used on line 95 for maps:size(Tokens)",
+        "Test verifies 2 of 3 branches complete, 1 cancelled"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is one of the wait_n policy tests. Line 94-95 has the _Tokens/Tokens mismatch."
+    },
+    {
+      "id": "US-003",
+      "title": "Fix variable naming mismatch on line 134 in join_first_complete_4_test",
+      "acceptance_criteria": [
+        "Change `_Tokens` to `Tokens` on line 134 in join_first_complete_4_test()",
+        "Variable correctly used on line 135 for maps:size(Tokens)",
+        "Test verifies first_complete policy with M=4 branches"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This test verifies the first_complete (discriminator) policy. Only 1 branch should complete, rest cancelled."
+    },
+    {
+      "id": "US-004",
+      "title": "Fix variable naming mismatch on line 163 in join_sync_merge_test",
+      "acceptance_criteria": [
+        "Change `_Tokens` to `Tokens` on line 163 in join_sync_merge_test()",
+        "Variable correctly used on line 164 for maps:size(Tokens)",
+        "Test verifies sync_merge policy where all branches complete"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "The sync_merge policy behaves like wait_all. All M=3 branches should complete."
+    },
+    {
+      "id": "US-005",
+      "title": "Fix variable naming mismatch on line 243 in parameterized test",
+      "acceptance_criteria": [
+        "Change `_Tokens` to `Tokens` on line 243 in join_wait_all_m_branches_test_()",
+        "Variable correctly used on line 244 for maps:size(Tokens)",
+        "Parameterized test runs for M = 2, 3, 5, 10 branches"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is a parameterized test that generates 4 test cases. The _Tokens/Tokens mismatch is on lines 243-244."
+    },
+    {
+      "id": "US-006",
+      "title": "Verify all tests pass after variable naming fixes",
+      "acceptance_criteria": [
+        "Run `rebar3 compile` - must complete without errors",
+        "Run `rebar3 eunit --module=wf_test_join` - all 17 tests must pass",
+        "Run `rebar3 eunit` - full test suite must pass without regressions",
+        "No compiler warnings about unbound variables",
+        "No unexpected test failures in other modules"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "After fixing all 6 variable naming issues, verify the entire test suite works correctly. This includes 13 named tests and 4 parameterized test cases in wf_test_join.erl."
+    }
+  ]
+}

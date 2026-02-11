@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "023-fix-compilation-error-in-testwftestjoinerl-variabl",
+  "title": "Fix compilation error in test/wf_test_join.erl — variable Tokens is unbound on lines 95, 135, 164, 244. The test needs to extract the tokens map from the exec_state record before using it. After fixing, verify rebar3 eunit runs all tests and they pass.",
+  "state": "critique",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T19:55:17.752Z",
+  "updated_at": "2026-02-11T19:58:09.847Z"
+}
