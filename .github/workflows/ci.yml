@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, wreckit/* ]
+  pull_request:
+    branches: [ main, wreckit/* ]
+
+jobs:
+  compile-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Erlang/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '26'
+          rebar3-version: 'latest'
+
+      - name: Compile
+        run: rebar3 compile
+
+      - name: EUnit Tests
+        run: rebar3 eunit
+
+      - name: Dialyzer
+        run: rebar3 dialyzer
+
+      - name: Acceptance Tests
+        run: escript src/wf_acceptance.erl
