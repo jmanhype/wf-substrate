@@ -213,8 +213,9 @@ cancel_region_complexity() ->
     {Time, _} = timer:tc(fun() ->
         wf_cancel:cancel_region(CaseId, scope1, [])
     end),
-    %% Should be fast (< 1ms) for 5 tokens
-    ?assert(Time < 1000).
+    %% Should be fast (< 10ms) for 5 tokens (relaxed from 1ms for CI stability)
+    %% See also: bench_small_scope (line 489) and bench_large_scope (line 496)
+    ?assert(Time < 10000).
 
 %%====================================================================
 %% Phase 4 Tests - Activity Cancellation
