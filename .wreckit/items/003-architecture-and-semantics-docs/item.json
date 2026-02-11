@@ -2,12 +2,12 @@
   "schema_version": 1,
   "id": "003-architecture-and-semantics-docs",
   "title": "Write architecture and formal semantics documentation",
-  "state": "implementing",
-  "overview": "Write docs/ARCHITECTURE.md covering: module dependency graph (wf_term -> wf_compile -> wf_exec, wf_state, wf_sched, wf_effect, wf_cancel, wf_mi, wf_trace, wf_receipt, wf_validate), runtime strategy choice explaining the bytecode VM approach (why not direct AST interpretation — O(depth) dispatch vs O(1) instruction fetch), compilation pipeline (term -> validate -> compile -> bytecode -> execute), supervision tree layout, and the effect boundary model.\n\nWrite docs/SEMANTICS.md with small-step operational semantics (reduction rules) for every kernel primitive: task execution, sequential composition (seq completes left then right), parallel fork (par spawns all branches), exclusive choice (xor enables one branch, disables others), join synchronization (wait-all, wait-n, first-complete policies), structured loop (check condition, execute body or exit), deferred evaluation, cancel scope (enter scope, propagate cancel, exit scope), and multiple instances (spawn N, collect results, apply join policy). Each rule should be written in inference-rule style with clear pre/post conditions on the execution state.",
+  "state": "done",
+  "overview": "Write docs/ARCHITECTURE.md covering: module dependency graph (wf_term -> wf_compile -> wf_exec, wf_state, wf_sched, wf_effect, wf_cancel, wf_mi, wf_trace, wf_receipt, wf_validate), runtime strategy choice explaining the bytecode VM approach (why not direct AST interpretation \u2014 O(depth) dispatch vs O(1) instruction fetch), compilation pipeline (term -> validate -> compile -> bytecode -> execute), supervision tree layout, and the effect boundary model.\n\nWrite docs/SEMANTICS.md with small-step operational semantics (reduction rules) for every kernel primitive: task execution, sequential composition (seq completes left then right), parallel fork (par spawns all branches), exclusive choice (xor enables one branch, disables others), join synchronization (wait-all, wait-n, first-complete policies), structured loop (check condition, execute body or exit), deferred evaluation, cancel scope (enter scope, propagate cancel, exit scope), and multiple instances (spawn N, collect results, apply join policy). Each rule should be written in inference-rule style with clear pre/post conditions on the execution state.",
   "branch": null,
   "pr_url": null,
   "pr_number": null,
-  "last_error": "Agent failed with exit code 1",
+  "last_error": null,
   "created_at": "2026-02-10T00:00:00.000Z",
   "updated_at": "2026-02-11T12:14:28.184Z"
 }
