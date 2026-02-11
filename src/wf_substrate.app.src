@@ -1,0 +1,15 @@
+{application, wf_substrate,
+ [{description, "Workflow pattern substrate for compiled pattern execution"},
+  {vsn, "0.1.0"},
+  {registered, [wf_substrate_sup]},
+  {mod, {wf_substrate_app, []}},
+  {applications,
+   [kernel,
+    stdlib,
+    sasl
+   ]},
+  {env,[]},
+  {modules, []},
+  {licenses, ["Apache-2.0"]},
+  {links, []}
+ ]}.

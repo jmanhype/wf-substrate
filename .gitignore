@@ -1,3 +1,29 @@
 
 # Wreckit local config (may contain secrets)
 .wreckit/config.local.json
+
+# Erlang/OTP build artifacts
+_build/
+.rebar3/
+*.beam
+erl_crash.dump
+rebar3.crashdump
+*.dump
+*.log
+log/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor files
+*~
+.*.swp
+.*.swo
+.*.sw?
+.*.bak

@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "id": "001-rebar3-project-scaffold",
+  "branch_name": "wreckit/001-rebar3-project-scaffold",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Create rebar.config with OTP 26+ requirement and zero dependencies",
+      "acceptance_criteria": [
+        "File exists at /Users/speed/wf-substrate/rebar.config",
+        "Contains {require_min_otp_vsn, 26} in erl_opts",
+        "Contains {deps, []} explicitly declaring no external dependencies",
+        "Contains {erl_opts, [debug_info, warnings_as_errors]} for strict compilation",
+        "Contains {shell_apps, [sasl]} for REPL support",
+        "Contains {xref_checks, [...]} with undefined function checks",
+        "File is valid Erlang syntax that can be parsed"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is the foundation for the entire build system. Must be created first before any other files can compile."
+    },
+    {
+      "id": "US-002",
+      "title": "Update .gitignore with Erlang/OTP build artifacts",
+      "acceptance_criteria": [
+        "File exists at /Users/speed/wf-substrate/.gitignore",
+        "Preserves existing .wreckit/config.local.json exclusion",
+        "Contains _build/ exclusion",
+        "Contains .rebar3/ exclusion",
+        "Contains *.beam exclusion",
+        "Contains erl_crash.dump and rebar3.crashdump exclusions",
+        "Contains *.dump and *.log exclusions",
+        "Running 'git status' after 'rebar3 compile' shows no build artifacts"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Must be done alongside rebar.config to prevent committing build artifacts."
+    },
+    {
+      "id": "US-003",
+      "title": "Create directory structure (src/, test/, docs/)",
+      "acceptance_criteria": [
+        "Directory exists at /Users/speed/wf-substrate/src/",
+        "Directory exists at /Users/speed/wf-substrate/test/",
+        "Directory exists at /Users/speed/wf-substrate/docs/",
+        "All directories are tracked by Git",
+        "Directories follow standard OTP/rebar3 layout"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Basic directory structure required before creating source files."
+    },
+    {
+      "id": "US-004",
+      "title": "Create wf_substrate.app.src application resource file",
+      "acceptance_criteria": [
+        "File exists at /Users/speed/wf-substrate/src/wf_substrate.app.src",
+        "Application name is 'wf_substrate'",
+        "Description matches 'Workflow pattern substrate for compiled pattern execution'",
+        "Version is '0.1.0'",
+        "Registered contains [wf_substrate_sup]",
+        "Mod points to {wf_substrate_app, []}",
+        "Applications lists [kernel, stdlib, sasl]",
+        "Modules is [] for auto-discovery",
+        "File is valid Erlang syntax"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Required for OTP application to load. Must be created before application callback module."
+    },
+    {
+      "id": "US-005",
+      "title": "Create wf_substrate_app.erl application callback module",
+      "acceptance_criteria": [
+        "File exists at /Users/speed/wf-substrate/src/wf_substrate_app.erl",
+        "Module declares -behaviour(application)",
+        "Exports start/2 and stop/1 functions",
+        "start/2 calls wf_substrate_sup:start_link()",
+        "stop/1 returns ok",
+        "Module compiles without errors",
+        "Application can be loaded with application:load(wf_substrate)"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Core OTP application callback. Required for application lifecycle."
+    },
+    {
+      "id": "US-006",
+      "title": "Create wf_substrate_sup.erl top-level supervisor",
+      "acceptance_criteria": [
+        "File exists at /Users/speed/wf-substrate/src/wf_substrate_sup.erl",
+        "Module declares -behaviour(supervisor)",
+        "Exports start_link/0 and init/1 functions",
+        "start_link/0 registers supervisor as wf_substrate_sup locally",
+        "init/1 uses map-based supervisor syntax (OTP 26+)",
+        "SupFlags sets strategy to one_for_one",
+        "SupFlags sets intensity to 10 and period to 60",
+        "ChildSpecs is empty list []",
+        "Module compiles without errors",
+        "Supervisor starts successfully with wf_substrate_sup:start_link()"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Top-level supervisor for the application. Starts empty, children added in future items."
+    },
+    {
+      "id": "US-007",
+      "title": "Create wf_substrate.erl public API placeholder module",
+      "acceptance_criteria": [
+        "File exists at /Users/speed/wf-substrate/src/wf_substrate.erl",
+        "Exports all 8 public API functions from PROMPT.md:273-282",
+        "Each function has proper -spec type specification",
+        "Functions return appropriate placeholder values (ok, {}, [], {error, not_implemented})",
+        "Module compiles without errors",
+        "All exported functions are callable (no undefined function errors)"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Public API facade. Exports functions defined in spec but returns placeholder values. Priority 2 because application can compile without it, but it's part of the core structure."
+    },
+    {
+      "id": "US-008",
+      "title": "Create wf_substrate_tests.erl empty EUnit test suite",
+      "acceptance_criteria": [
+        "File exists at /Users/speed/wf-substrate/test/wf_substrate_tests.erl",
+        "Includes -include_lib(\"eunit/include/eunit.hrl\")",
+        "Contains no test functions (zero tests)",
+        "Module compiles without errors",
+        "Running 'rebar3 eunit' succeeds and reports '0 tests, 0 failures'"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Empty test suite to satisfy rebar3 eunit requirement. Priority 2 because project can compile without it, but needed for acceptance criteria."
+    },
+    {
+      "id": "US-009",
+      "title": "Create docs/README.md placeholder",
+      "acceptance_criteria": [
+        "File exists at /Users/speed/wf-substrate/docs/README.md",
+        "Documents that docs will be added in future items",
+        "Lists planned documentation files (ARCHITECTURE.md, SEMANTICS.md, PATTERNS.md, TESTING.md, OPERATIONS.md)",
+        "References PROMPT.md as source of truth",
+        "docs/ directory is tracked by Git"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Placeholder documentation. Priority 3 because not required for compilation or testing, but part of complete scaffold."
+    },
+    {
+      "id": "US-010",
+      "title": "Verify complete build and application lifecycle",
+      "acceptance_criteria": [
+        "Command 'rebar3 compile' succeeds with no errors",
+        "Command 'rebar3 compile' produces .beam files in _build/default/lib/wf_substrate/ebin/",
+        "Command 'rebar3 eunit' succeeds with '0 tests, 0 failures' output",
+        "Command 'application:load(wf_substrate)' succeeds in Erlang shell",
+        "Command 'application:start(wf_substrate)' starts successfully",
+        "Command 'application:stop(wf_substrate)' stops cleanly",
+        "wf_substrate_sup appears in registered() list when application is running",
+        "Clean build from scratch succeeds: 'rebar3 clean && rebar3 compile'"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Final verification that everything works together. Must pass all acceptance criteria from PROMPT.md:353-355."
+    },
+    {
+      "id": "US-011",
+      "title": "Verify gitignore prevents build artifacts from being committed",
+      "acceptance_criteria": [
+        "After 'rebar3 compile', 'git status' shows no _build/ directory",
+        "After 'rebar3 compile', 'git status' shows no *.beam files",
+        "After 'rebar3 compile', 'git status' shows no erl_crash.dump files",
+        "After 'rebar3 compile', 'git status' shows no .rebar3/ directory",
+        "'git add .' followed by 'git status' stages only source files, not build artifacts",
+        ".gitignore preserves existing .wreckit/config.local.json exclusion"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Verifies repository hygiene. Priority 2 because build works without it, but critical for project quality."
+    },
+    {
+      "id": "US-012",
+      "title": "Verify OTP 26+ version enforcement",
+      "acceptance_criteria": [
+        "rebar.config contains {require_min_otp_vsn, 26}",
+        "Running 'erl -version' shows OTP 26 or higher",
+        "If OTP < 26 is available, 'rebar3 compile' fails with version error (test if possible)",
+        "rebar.config uses modern map-based supervisor syntax compatible with OTP 26+",
+        "All modules compile using OTP 26+ features without warnings"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Verifies OTP version requirement. Priority 4 (lowest) because system is assumed to meet requirements, but good to verify."
+    }
+  ]
+}
