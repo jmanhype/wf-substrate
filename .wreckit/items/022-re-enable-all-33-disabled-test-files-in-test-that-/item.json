@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "022-re-enable-all-33-disabled-test-files-in-test-that-",
+  "title": "Re-enable all 33 disabled test files in test/ that were moved to _build/test/lib/wf_substrate/test/disabled/. The previous fix disabled tests instead of fixing them. Move them back from disabled, fix their compilation errors (missing includes, wrong arities, undefined functions, missing records), and ensure rebar3 eunit runs ALL test files and they pass. Do NOT disable or delete any test — fix every single one.",
+  "state": "critique",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T19:38:12.225Z",
+  "updated_at": "2026-02-11T19:51:05.202Z"
+}
