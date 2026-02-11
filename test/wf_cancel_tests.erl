@@ -8,6 +8,24 @@
 -include_lib("wf_cancel.hrl").
 
 %%====================================================================
+%% Setup
+%%====================================================================
+
+setup() ->
+    case whereis(wf_state) of
+        undefined ->
+            {ok, Pid} = wf_state:start_link(),
+            Pid;
+        Pid ->
+            Pid
+    end.
+
+cleanup(_Pid) ->
+    %% Clear ETS table to prevent test interference
+    ets:delete_all_objects(wf_state_store),
+    ok.
+
+%%====================================================================
 %% Test Helpers
 %%====================================================================
 
@@ -45,34 +63,34 @@ create_test_state() ->
 %%====================================================================
 
 %% Test module compiles and loads
-wf_cancel_compiles_test_() ->
-    ?_assert(true).
+wf_cancel_compiles() ->
+    ?assert(true).
 
 %% Test is_cancelled/2 with active scope
-is_cancelled_active_scope_test_() ->
+is_cancelled_active_scope() ->
     State = create_test_state(),
-    ?_assertNot(wf_cancel:is_cancelled(State, scope1)).
+    ?assertNot(wf_cancel:is_cancelled(State, scope1)).
 
 %% Test is_cancelled/2 with cancelled scope
-is_cancelled_cancelled_scope_test_() ->
+is_cancelled_cancelled_scope() ->
     InitialCtx = #{},
     {ok, State0} = wf_state:new(InitialCtx),
     {ok, State1} = wf_state:enter_scope(State0, scope1),
-    {ok, State2} = wf_state:commit(State1),
+    {ok, State2, _Receipt1} = wf_state:commit(State1),
 
     %% Cancel the scope
     State3 = wf_state:buffer_mutation(State2, {cancel_scope, scope1}),
-    {ok, State4, _Receipt} = wf_state:commit(State3),
+    {ok, State4, _Receipt2} = wf_state:commit(State3),
 
-    ?_assert(wf_cancel:is_cancelled(State4, scope1)).
+    ?assert(wf_cancel:is_cancelled(State4, scope1)).
 
 %% Test is_cancelled/2 with undefined scope
-is_cancelled_undefined_scope_test_() ->
+is_cancelled_undefined_scope() ->
     State = create_test_state(),
-    ?_assertNot(wf_cancel:is_cancelled(State, nonexistent_scope)).
+    ?assertNot(wf_cancel:is_cancelled(State, nonexistent_scope)).
 
 %% Test propagate/2 marks tokens in scope as cancelled
-propagate_marks_tokens_in_scope_test_() ->
+propagate_marks_tokens_in_scope() ->
     TokensMap = #{
         token1 => #token{token_id = token1, ip = 0, scope_id = scope1, value = task1, status = active},
         token2 => #token{token_id = token2, ip = 0, scope_id = scope2, value = task2, status = active}
@@ -82,13 +100,11 @@ propagate_marks_tokens_in_scope_test_() ->
     CancelledTokens = wf_cancel:propagate(scope1, TokensMap),
 
     %% Verify: token1 cancelled, token2 active
-    [
-        ?_assertEqual(cancelled, (maps:get(token1, CancelledTokens))#token.status),
-        ?_assertEqual(active, (maps:get(token2, CancelledTokens))#token.status)
-    ].
+    ?assertEqual(cancelled, (maps:get(token1, CancelledTokens))#token.status),
+    ?assertEqual(active, (maps:get(token2, CancelledTokens))#token.status).
 
 %% Test propagate/2 preserves other token fields
-propagate_preserves_fields_test_() ->
+propagate_preserves_fields() ->
     OriginalToken = #token{
         token_id = token1,
         ip = 5,
@@ -101,44 +117,37 @@ propagate_preserves_fields_test_() ->
     CancelledTokens = wf_cancel:propagate(scope1, TokensMap),
     CancelledToken = maps:get(token1, CancelledTokens),
 
-    [
-        ?_assertEqual(token1, CancelledToken#token.token_id),
-        ?_assertEqual(5, CancelledToken#token.ip),
-        ?_assertEqual(scope1, CancelledToken#token.scope_id),
-        ?_assertEqual(some_value, CancelledToken#token.value),
-        ?_assertEqual(cancelled, CancelledToken#token.status)
-    ].
+    ?assertEqual(token1, CancelledToken#token.token_id),
+    ?assertEqual(5, CancelledToken#token.ip),
+    ?assertEqual(scope1, CancelledToken#token.scope_id),
+    ?assertEqual(some_value, CancelledToken#token.value),
+    ?assertEqual(cancelled, CancelledToken#token.status).
 
 %%====================================================================
 %% Phase 3 Tests - Region Cancellation
 %%====================================================================
 
 %% Test region cancellation
-cancel_region_test_() ->
-    {setup,
-     fun() -> create_test_state() end,
-     fun(State) ->
-         ScopeId = scope1,
-         CaseId = wf_state:get_case_id(State),
-         {ok, Event} = wf_cancel:cancel_region(CaseId, ScopeId, []),
-         [
-             ?_assertEqual(ScopeId, Event#cancel_region.scope_id),
-             ?_assertEqual(1, length(Event#cancel_region.cancelled_tokens)),
-             ?_assertEqual(0, length(Event#cancel_region.cancelled_effects))
-         ]
-     end}.
+cancel_region() ->
+    State = create_test_state(),
+    ScopeId = scope1,
+    CaseId = wf_state:get_case_id(State),
+    {ok, Event} = wf_cancel:cancel_region(CaseId, ScopeId, []),
+    ?assertEqual(ScopeId, Event#cancel_region.scope_id),
+    ?assertEqual(1, length(Event#cancel_region.cancelled_tokens)),
+    ?assertEqual(0, length(Event#cancel_region.cancelled_effects)).
 
 %% Test region cancellation error on undefined scope
-cancel_region_undefined_scope_test_() ->
+cancel_region_undefined_scope() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
-    ?_assertEqual(
+    ?assertEqual(
         {error, {scope_not_found, nonexistent_scope}},
         wf_cancel:cancel_region(CaseId, nonexistent_scope, [])
     ).
 
 %% Test region cancellation error on already cancelled
-cancel_region_already_cancelled_test_() ->
+cancel_region_already_cancelled() ->
     InitialCtx = #{},
     {ok, State0} = wf_state:new(InitialCtx),
     {ok, State1} = wf_state:enter_scope(State0, scope1),
@@ -149,13 +158,13 @@ cancel_region_already_cancelled_test_() ->
     {ok, _Event1} = wf_cancel:cancel_region(CaseId, scope1, []),
 
     %% Try to cancel again
-    ?_assertEqual(
+    ?assertEqual(
         {error, {already_cancelled, scope1}},
         wf_cancel:cancel_region(CaseId, scope1, [])
     ).
 
 %% Test region cancellation preserves other scopes (invariant)
-cancel_region_preserves_other_scopes_test_() ->
+cancel_region_preserves_other_scopes() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
 
@@ -167,7 +176,7 @@ cancel_region_preserves_other_scopes_test_() ->
     Tokens = wf_state:get_tokens(StateAfter),
     TokensInScope2 = [T || {_, T} <- maps:to_list(Tokens),
                           T#token.scope_id =:= scope2],
-    ?_assertEqual([active], [T#token.status || T <- TokensInScope2]).
+    ?assertEqual([active], [T#token.status || T <- TokensInScope2]).
 
 %% Helper: create state with N tokens, M in scope1
 create_state_with_n_tokens_in_scope(TotalTokens, TokensInScope) ->
@@ -197,7 +206,7 @@ create_state_with_n_tokens_in_scope(TotalTokens, TokensInScope) ->
     State2.
 
 %% Test O(scope_size) complexity
-cancel_region_complexity_test_() ->
+cancel_region_complexity() ->
     %% Create state with 100 tokens total, 5 in scope
     State = create_state_with_n_tokens_in_scope(100, 5),
     CaseId = wf_state:get_case_id(State),
@@ -205,36 +214,34 @@ cancel_region_complexity_test_() ->
         wf_cancel:cancel_region(CaseId, scope1, [])
     end),
     %% Should be fast (< 1ms) for 5 tokens
-    ?_assert(Time < 1000).
+    ?assert(Time < 1000).
 
 %%====================================================================
 %% Phase 4 Tests - Activity Cancellation
 %%====================================================================
 
 %% Test activity cancellation (task without effect)
-cancel_activity_without_effect_test_() ->
+cancel_activity_without_effect() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
     TaskId = task1,
 
     {ok, Event} = wf_cancel:cancel_activity(CaseId, TaskId, []),
-    [
-        ?_assertEqual(TaskId, Event#cancel_activity.scope_id),
-        ?_assertEqual(1, length(Event#cancel_activity.cancelled_tokens)),
-        ?_assertEqual(0, length(Event#cancel_activity.cancelled_effects))
-    ].
+    ?assertEqual(TaskId, Event#cancel_activity.scope_id),
+    ?assertEqual(1, length(Event#cancel_activity.cancelled_tokens)),
+    ?assertEqual(0, length(Event#cancel_activity.cancelled_effects)).
 
 %% Test activity cancellation error on undefined task
-cancel_activity_undefined_task_test_() ->
+cancel_activity_undefined_task() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
-    ?_assertEqual(
+    ?assertEqual(
         {error, {task_not_found, nonexistent_task}},
         wf_cancel:cancel_activity(CaseId, nonexistent_task, [])
     ).
 
 %% Test activity cancellation preserves other tasks
-cancel_activity_preserves_other_tasks_test_() ->
+cancel_activity_preserves_other_tasks() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
 
@@ -246,10 +253,10 @@ cancel_activity_preserves_other_tasks_test_() ->
     Tokens = wf_state:get_tokens(StateAfter),
     Task2Token = [T || {_, T} <- maps:to_list(Tokens),
                    T#token.value =:= task2],
-    ?_assertEqual([active], [T#token.status || T <- Task2Token]).
+    ?assertEqual([active], [T#token.status || T <- Task2Token]).
 
 %% Test activity cancellation of already cancelled task
-cancel_activity_already_cancelled_test_() ->
+cancel_activity_already_cancelled() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
 
@@ -257,13 +264,13 @@ cancel_activity_already_cancelled_test_() ->
     {ok, _Event1} = wf_cancel:cancel_activity(CaseId, task1, []),
 
     %% Try to cancel again
-    ?_assertEqual(
+    ?assertEqual(
         {error, {already_cancelled, task1}},
         wf_cancel:cancel_activity(CaseId, task1, [])
     ).
 
 %% Test activity cancellation invariants
-cancel_activity_invariants_test_() ->
+cancel_activity_invariants() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
 
@@ -271,36 +278,34 @@ cancel_activity_invariants_test_() ->
 
     %% Verify invariants
     {ok, StateAfter} = wf_state:restore_from_ets(CaseId),
-    ?_assertEqual(ok, wf_cancel:verify_no_orphaned_tokens(StateAfter, scope1)).
+    ?assertEqual(ok, wf_cancel:verify_no_orphaned_tokens(StateAfter, scope1)).
 
 %%====================================================================
 %% Phase 5 Tests - Case Cancellation
 %%====================================================================
 
 %% Test case cancellation
-cancel_case_test_() ->
+cancel_case() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
 
     {ok, Event} = wf_cancel:cancel_case(CaseId),
-    [
-        ?_assertEqual(CaseId, Event#cancel_case.scope_id),
-        ?_assertEqual(2, length(Event#cancel_case.cancelled_tokens)),
-        ?_assertEqual(0, length(Event#cancel_case.cancelled_effects))
-    ].
+    ?assertEqual(CaseId, Event#cancel_case.scope_id),
+    ?assertEqual(2, length(Event#cancel_case.cancelled_tokens)),
+    ?assertEqual(0, length(Event#cancel_case.cancelled_effects)).
 
 %% Test case cancellation marks status
-cancel_case_status_test_() ->
+cancel_case_status() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
 
     {ok, _Event} = wf_cancel:cancel_case(CaseId),
 
     {ok, StateAfter} = wf_state:restore_from_ets(CaseId),
-    ?_assertEqual(cancelled, wf_state:get_status(StateAfter)).
+    ?assertEqual(cancelled, wf_state:get_status(StateAfter)).
 
 %% Test case cancellation error on already cancelled
-cancel_case_already_cancelled_test_() ->
+cancel_case_already_cancelled() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
 
@@ -308,27 +313,25 @@ cancel_case_already_cancelled_test_() ->
     {ok, _Event1} = wf_cancel:cancel_case(CaseId),
 
     %% Try to cancel again
-    ?_assertEqual(
+    ?assertEqual(
         {error, {already_cancelled, CaseId}},
         wf_cancel:cancel_case(CaseId)
     ).
 
 %% Test case cancellation cancels all tokens
-cancel_case_all_tokens_test_() ->
-    fun() ->
-        State = create_test_state(),
-        CaseId = wf_state:get_case_id(State),
+cancel_case_all_tokens() ->
+    State = create_test_state(),
+    CaseId = wf_state:get_case_id(State),
 
-        {ok, Event} = wf_cancel:cancel_case(CaseId),
+    {ok, Event} = wf_cancel:cancel_case(CaseId),
 
-        %% Verify all tokens cancelled
-        {ok, StateAfter} = wf_state:restore_from_ets(CaseId),
-        Tokens = wf_state:get_tokens(StateAfter),
-        ActiveTokens = [T || {_, T} <- maps:to_list(Tokens),
-                         T#token.status =:= active],
-        ?assertEqual(0, length(ActiveTokens)),
-        ?assertEqual(2, length(Event#cancel_case.cancelled_tokens))
-    end.
+    %% Verify all tokens cancelled
+    {ok, StateAfter} = wf_state:restore_from_ets(CaseId),
+    Tokens = wf_state:get_tokens(StateAfter),
+    ActiveTokens = [T || {_, T} <- maps:to_list(Tokens),
+                     T#token.status =:= active],
+    ?assertEqual(0, length(ActiveTokens)),
+    ?assertEqual(2, length(Event#cancel_case.cancelled_tokens)).
 
 %% Helper: create state with N tokens
 create_state_with_n_tokens(N) ->
@@ -352,21 +355,21 @@ create_state_with_n_tokens(N) ->
     State1.
 
 %% Test case cancellation with many tokens
-cancel_case_many_tokens_test_() ->
+cancel_case_many_tokens() ->
     State = create_state_with_n_tokens(100),
     CaseId = wf_state:get_case_id(State),
 
     {ok, Event} = wf_cancel:cancel_case(CaseId),
 
     %% Verify all tokens cancelled
-    ?_assertEqual(100, length(Event#cancel_case.cancelled_tokens)).
+    ?assertEqual(100, length(Event#cancel_case.cancelled_tokens)).
 
 %%====================================================================
 %% Phase 6 Tests - wf_exec Integration
 %%====================================================================
 
 %% Test wf_cancel:propagate/2 integration
-cancel_propagate_test_() ->
+cancel_propagate() ->
     TokensMap = #{
         token1 => #token{token_id = token1, ip = 0, scope_id = scope1, value = task1, status = active},
         token2 => #token{token_id = token2, ip = 0, scope_id = scope2, value = task2, status = active}
@@ -376,10 +379,8 @@ cancel_propagate_test_() ->
     CancelledTokens = wf_cancel:propagate(scope1, TokensMap),
 
     %% Verify: token1 cancelled, token2 active
-    [
-        ?_assertEqual(cancelled, (maps:get(token1, CancelledTokens))#token.status),
-        ?_assertEqual(active, (maps:get(token2, CancelledTokens))#token.status)
-    ].
+    ?assertEqual(cancelled, (maps:get(token1, CancelledTokens))#token.status),
+    ?assertEqual(active, (maps:get(token2, CancelledTokens))#token.status).
 
 %%====================================================================
 %% Phase 7 Tests - Comprehensive Testing (Nested Scopes and Edge Cases)
@@ -402,7 +403,7 @@ create_state_with_nested_scopes() ->
     State5.
 
 %% Test nested scope cancellation
-nested_scope_cancellation_test_() ->
+nested_scope_cancellation() ->
     State = create_state_with_nested_scopes(),
     CaseId = wf_state:get_case_id(State),
 
@@ -416,10 +417,10 @@ nested_scope_cancellation_test_() ->
     ParentTokens = [T || {_, T} <- maps:to_list(Tokens),
                        T#token.scope_id =:= parent_scope],
 
-    ?_assertEqual([cancelled], [T#token.status || T <- ParentTokens]).
+    ?assertEqual([cancelled], [T#token.status || T <- ParentTokens]).
 
 %% Test cancellation with empty scope (no tokens)
-cancel_empty_scope_test_() ->
+cancel_empty_scope() ->
     InitialCtx = #{},
     {ok, State0} = wf_state:new(InitialCtx),
     {ok, State1} = wf_state:enter_scope(State0, empty_scope),
@@ -429,10 +430,10 @@ cancel_empty_scope_test_() ->
     CaseId = wf_state:get_case_id(State2),
     {ok, Event} = wf_cancel:cancel_region(CaseId, empty_scope, []),
 
-    ?_assertEqual(0, length(Event#cancel_region.cancelled_tokens)).
+    ?assertEqual(0, length(Event#cancel_region.cancelled_tokens)).
 
 %% Test cancellation with single token
-cancel_single_token_test_() ->
+cancel_single_token() ->
     InitialCtx = #{},
     {ok, State0} = wf_state:new(InitialCtx),
     {ok, State1} = wf_state:enter_scope(State0, scope1),
@@ -445,10 +446,10 @@ cancel_single_token_test_() ->
     CaseId = wf_state:get_case_id(State3),
     {ok, Event} = wf_cancel:cancel_region(CaseId, scope1, []),
 
-    ?_assertEqual(1, length(Event#cancel_region.cancelled_tokens)).
+    ?assertEqual(1, length(Event#cancel_region.cancelled_tokens)).
 
 %% Test cancellation preserves token values
-cancel_preserves_values_test_() ->
+cancel_preserves_values() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
 
@@ -458,47 +459,90 @@ cancel_preserves_values_test_() ->
     {ok, StateAfter} = wf_state:restore_from_ets(CaseId),
     Tokens = wf_state:get_tokens(StateAfter),
     Token1 = [T || {_, T} <- maps:to_list(Tokens), T#token.value =:= task1],
-    ?_assertEqual([task1], [T#token.value || T <- Token1]).
+    ?assertEqual([task1], [T#token.value || T <- Token1]).
 
 %% Test verify_scope_isolation with two independent scopes
-verify_scope_isolation_test_() ->
+verify_scope_isolation() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
 
     {ok, _Event} = wf_cancel:cancel_region(CaseId, scope1, []),
 
     {ok, StateAfter} = wf_state:restore_from_ets(CaseId),
-    ?_assertEqual(ok, wf_cancel:verify_scope_isolation(StateAfter, scope1)).
+    ?assertEqual(ok, wf_cancel:verify_scope_isolation(StateAfter, scope1)).
 
 %% Test verify_no_orphaned_tokens
-verify_no_orphaned_tokens_test_() ->
+verify_no_orphaned_tokens() ->
     State = create_test_state(),
     CaseId = wf_state:get_case_id(State),
 
     {ok, _Event} = wf_cancel:cancel_region(CaseId, scope1, []),
 
     {ok, StateAfter} = wf_state:restore_from_ets(CaseId),
-    ?_assertEqual(ok, wf_cancel:verify_no_orphaned_tokens(StateAfter, scope1)).
+    ?assertEqual(ok, wf_cancel:verify_no_orphaned_tokens(StateAfter, scope1)).
 
 %% Performance benchmark: small scope
-bench_small_scope_test_() ->
+bench_small_scope() ->
     State = create_state_with_n_tokens_in_scope(100, 10),
     CaseId = wf_state:get_case_id(State),
     {Time, _} = timer:tc(fun() -> wf_cancel:cancel_region(CaseId, scope1, []) end),
-    ?_assert(Time < 1000).  %% < 1ms for 10 tokens
+    ?assert(Time < 1000).  %% < 1ms for 10 tokens
 
 %% Performance benchmark: large scope
-bench_large_scope_test_() ->
+bench_large_scope() ->
     State = create_state_with_n_tokens_in_scope(10000, 1000),
     CaseId = wf_state:get_case_id(State),
     {Time, _} = timer:tc(fun() -> wf_cancel:cancel_region(CaseId, scope1, []) end),
-    ?_assert(Time < 100000).  %% < 100ms for 1000 tokens
+    ?assert(Time < 100000).  %% < 100ms for 1000 tokens
 
 %% Performance benchmark: verify O(scope_size) not O(total_tokens)
-bench_complexity_isolation_test_() ->
+bench_complexity_isolation() ->
     %% Create state with 10000 total tokens, 10 in scope
     State = create_state_with_n_tokens_in_scope(10000, 10),
     CaseId = wf_state:get_case_id(State),
     {Time, _} = timer:tc(fun() -> wf_cancel:cancel_region(CaseId, scope1, []) end),
     %% Should be fast (only 10 tokens cancelled), not O(10000)
-    ?_assert(Time < 1000).
+    ?assert(Time < 1000).
+
+%%====================================================================
+%% Master Test Suite with Setup
+%%====================================================================
+
+wf_cancel_master_test_() ->
+    {setup,
+     fun setup/0,
+     fun cleanup/1,
+     [
+         {"wf_cancel_compiles", fun wf_cancel_compiles/0},
+         {"is_cancelled_active_scope", fun is_cancelled_active_scope/0},
+         {"is_cancelled_cancelled_scope", fun is_cancelled_cancelled_scope/0},
+         {"is_cancelled_undefined_scope", fun is_cancelled_undefined_scope/0},
+         {"propagate_marks_tokens_in_scope", fun propagate_marks_tokens_in_scope/0},
+         {"propagate_preserves_fields", fun propagate_preserves_fields/0},
+         {"cancel_region", fun cancel_region/0},
+         {"cancel_region_undefined_scope", fun cancel_region_undefined_scope/0},
+         {"cancel_region_already_cancelled", fun cancel_region_already_cancelled/0},
+         {"cancel_region_preserves_other_scopes", fun cancel_region_preserves_other_scopes/0},
+         {"cancel_region_complexity", fun cancel_region_complexity/0},
+         {"cancel_activity_without_effect", fun cancel_activity_without_effect/0},
+         {"cancel_activity_undefined_task", fun cancel_activity_undefined_task/0},
+         {"cancel_activity_preserves_other_tasks", fun cancel_activity_preserves_other_tasks/0},
+         {"cancel_activity_already_cancelled", fun cancel_activity_already_cancelled/0},
+         {"cancel_activity_invariants", fun cancel_activity_invariants/0},
+         {"cancel_case", fun cancel_case/0},
+         {"cancel_case_status", fun cancel_case_status/0},
+         {"cancel_case_already_cancelled", fun cancel_case_already_cancelled/0},
+         {"cancel_case_all_tokens", fun cancel_case_all_tokens/0},
+         {"cancel_case_many_tokens", fun cancel_case_many_tokens/0},
+         {"cancel_propagate", fun cancel_propagate/0},
+         {"nested_scope_cancellation", fun nested_scope_cancellation/0},
+         {"cancel_empty_scope", fun cancel_empty_scope/0},
+         {"cancel_single_token", fun cancel_single_token/0},
+         {"cancel_preserves_values", fun cancel_preserves_values/0},
+         {"verify_scope_isolation", fun verify_scope_isolation/0},
+         {"verify_no_orphaned_tokens", fun verify_no_orphaned_tokens/0},
+         {"bench_small_scope", fun bench_small_scope/0},
+         {"bench_large_scope", fun bench_large_scope/0},
+         {"bench_complexity_isolation", fun bench_complexity_isolation/0}
+     ]
+    }.
