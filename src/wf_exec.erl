@@ -3,6 +3,10 @@
 %% Bytecode executor for workflow patterns
 %% Hot loop with cooperative scheduling
 
+%% Include record definitions
+-include("wf_mi.hrl").
+-include("wf_exec.hrl").
+
 %%====================================================================
 %% API
 %%====================================================================
@@ -19,50 +23,6 @@
     set_ctx/2,
     get_scope_stack_depth/1
 ]).
-
-%%====================================================================
-%% Records
-%%====================================================================
-
-%% Token: Logical thread of execution
--record(token, {
-    token_id :: term(),
-    ip :: non_neg_integer(),
-    scope_id :: term(),
-    value :: term(),
-    status :: active | complete | cancelled
-}).
-
-%% Branch info: Parallel branch tracking
--record(branch_info, {
-    branch_id :: term(),
-    tokens :: [term()],
-    join_id :: term(),
-    targets :: [non_neg_integer()]
-}).
-
-%% Join counter: Join synchronization state
--record(join_counter, {
-    join_id :: term(),
-    completed :: non_neg_integer(),
-    required :: non_neg_integer(),
-    policy :: wf_vm:join_policy(),
-    results :: [term()]
-}).
-
-%% Execution state record
--record(exec_state, {
-    ip :: non_neg_integer(),
-    bytecode :: wf_vm:wf_bc(),
-    ctx :: map(),
-    tokens :: #{term() => #token{}},
-    branch_map :: #{term() => #branch_info{}},
-    join_counters :: #{term() => #join_counter{}},
-    scope_stack :: [term()],
-    step_count :: non_neg_integer(),
-    status :: running | done | blocked | cancelled,
-    current_token :: term() | undefined
-}).
 
 %%====================================================================
 %% Types
@@ -85,7 +45,8 @@ new(Bytecode) ->
         ip = 0,
         scope_id = RootScopeId,
         value = undefined,
-        status = active
+        status = active,
+        instance_id = undefined
     },
     #exec_state{
         ip = 0,
@@ -188,6 +149,8 @@ execute_opcode({SeqEnter, _Arg}, ExecState) when SeqEnter =:= 'SEQ_ENTER'; SeqEn
     execute_seq_enter({SeqEnter, _Arg}, ExecState);
 execute_opcode({SeqNext, TargetIP}, ExecState) when SeqNext =:= 'SEQ_NEXT'; SeqNext =:= seq_next ->
     execute_seq_next({SeqNext, TargetIP}, ExecState);
+execute_opcode({MiSpawn, Policy}, ExecState) when MiSpawn =:= 'MI_SPAWN'; MiSpawn =:= mi_spawn ->
+    execute_mi_spawn({MiSpawn, Policy}, ExecState);
 execute_opcode({ParFork, Targets}, ExecState) when ParFork =:= 'PAR_FORK'; ParFork =:= par_fork ->
     execute_par_fork({ParFork, Targets}, ExecState);
 execute_opcode({JoinWait, _Policy}, ExecState) when JoinWait =:= 'JOIN_WAIT'; JoinWait =:= join_wait ->
@@ -272,7 +235,8 @@ execute_par_fork({_ParFork, TargetIPs}, ExecState) ->
             ip = IP,
             scope_id = ScopeId,
             value = undefined,
-            status = active
+            status = active,
+            instance_id = undefined
         },
         {TokenId, Token}
     end, TargetIPs),
@@ -322,6 +286,100 @@ execute_par_fork({_ParFork, TargetIPs}, ExecState) ->
         current_token = NextToken
     }.
 
+%% @doc Execute MI_SPAWN: spawn N instances of body at same IP
+%% Unlike PAR_FORK (spawns to different IPs), MI_SPAWN spawns N instances
+%% to the SAME body IP, with per-instance state via instance_id
+execute_mi_spawn({'MI_SPAWN', {MIPolicy, MIJoinPolicy, BodyIP}}, ExecState) ->
+    %% Spawn instances via wf_mi
+    {ok, Instances, _MIConfig} = wf_mi:spawn_instances(
+        MIPolicy, MIJoinPolicy, BodyIP, get_current_scope(ExecState)
+    ),
+
+    %% Create tokens for each instance
+    ScopeId = get_current_scope(ExecState),
+    CurrentToken = ExecState#exec_state.current_token,
+    NewTokens = lists:map(fun(Instance) ->
+        Token = #token{
+            token_id = Instance#mi_instance.token_id,
+            ip = BodyIP,  %% All instances execute SAME body
+            scope_id = ScopeId,
+            value = #{instance_id => Instance#mi_instance.instance_id,
+                      instance_num => Instance#mi_instance.instance_num},
+            status = active,
+            instance_id = Instance#mi_instance.instance_id
+        },
+        {Instance#mi_instance.token_id, Token}
+    end, Instances),
+
+    %% Add tokens to state
+    TokensMap0 = ExecState#exec_state.tokens,
+    TokensMap = lists:foldl(fun({TokenId, Token}, Acc) ->
+        maps:put(TokenId, Token, Acc)
+    end, TokensMap0, NewTokens),
+
+    %% Create branch info (tracks all instances)
+    BranchId = make_ref(),
+    BranchInfo = #branch_info{
+        branch_id = BranchId,
+        tokens = [TokenId || {TokenId, _Token} <- NewTokens],
+        join_id = undefined,  %% Set below if sync required
+        targets = [BodyIP]  %% Same IP for all instances
+    },
+    BranchMap0 = ExecState#exec_state.branch_map,
+    BranchMap = maps:put(BranchId, BranchInfo, BranchMap0),
+
+    %% Create join counter (if sync required)
+    {JoinCounters, BranchMapFinal, NextIP} = case MIJoinPolicy of
+        none ->
+            %% Fire-and-forget, no join
+            {ExecState#exec_state.join_counters, BranchMap, ExecState#exec_state.ip + 1};
+        _SyncPolicy ->
+            JoinId = make_ref(),
+            NumInstances = length(Instances),
+            Required = case MIJoinPolicy of
+                wait_all -> NumInstances;
+                {wait_n, N} -> min(N, NumInstances);  %% Guard against N > M
+                first_complete -> 1
+            end,
+            JoinCounter = #join_counter{
+                join_id = JoinId,
+                completed = 0,
+                required = Required,
+                policy = mi_join_to_exec_join(MIJoinPolicy),
+                results = []
+            },
+            JoinCounters0 = ExecState#exec_state.join_counters,
+            JoinCounters1 = maps:put(JoinId, JoinCounter, JoinCounters0),
+
+            %% Update branch info with join_id
+            BranchMapWithJoin = maps:put(BranchId,
+                BranchInfo#branch_info{join_id = JoinId}, BranchMap),
+
+            {JoinCounters1, BranchMapWithJoin, ExecState#exec_state.ip + 1}
+    end,
+
+    %% Remove current token (replaced by instance tokens)
+    TokensMapFinal = maps:remove(CurrentToken, TokensMap),
+
+    %% Select next token to execute
+    NextToken = select_next_token(TokensMapFinal),
+
+    ExecState#exec_state{
+        ip = NextIP,
+        tokens = TokensMapFinal,
+        branch_map = BranchMapFinal,
+        join_counters = JoinCounters,
+        step_count = ExecState#exec_state.step_count + 1,
+        current_token = NextToken
+    }.
+
+%% @doc Convert MI join policy to wf_exec join policy
+-spec mi_join_to_exec_join(wf_mi:mi_join_policy()) -> wf_vm:join_policy().
+mi_join_to_exec_join(wait_all) -> all;
+mi_join_to_exec_join({wait_n, N}) -> {first_n, N};
+mi_join_to_exec_join(first_complete) -> first_complete;
+mi_join_to_exec_join(none) -> none.
+
 %% @doc Execute JOIN_WAIT: check join counter, block if not satisfied
 execute_join_wait({_JoinWait, _Policy}, ExecState) ->
     %% Find active join (must be exactly one)
@@ -342,7 +400,8 @@ execute_join_wait({_JoinWait, _Policy}, ExecState) ->
                 ip = ExecState#exec_state.ip + 1,
                 scope_id = get_current_scope(ExecState),
                 value = merge_results(JoinCounter#join_counter.results, all),
-                status = active
+                status = active,
+                instance_id = undefined
             },
             Tokens = maps:put(ContinuationTokenId, ContinuationToken, ExecState#exec_state.tokens),
 
@@ -539,37 +598,84 @@ execute_done(ExecState) ->
     UpdatedToken = Token#token{status = complete},
     Tokens = maps:put(CurrentToken, UpdatedToken, ExecState#exec_state.tokens),
 
-    %% Increment join counter if part of a parallel branch
-    {UpdatedTokens2, UpdatedJoinCounters} = case find_branch_for_token(CurrentToken, ExecState#exec_state.branch_map) of
-        {ok, BranchId} ->
-            %% Token is part of a parallel branch, increment join counter
-            NewJoinCounters = increment_join_counter(BranchId, ExecState, UpdatedToken#token.value),
-            {Tokens, NewJoinCounters};
-        error ->
-            %% Not part of a parallel branch
-            {Tokens, ExecState#exec_state.join_counters}
-    end,
+    %% Check if token is MI instance
+    case Token#token.instance_id of
+        undefined ->
+            %% Not an MI instance, use existing branch logic
+            {UpdatedTokens2, UpdatedJoinCounters} = case find_branch_for_token(CurrentToken, ExecState#exec_state.branch_map) of
+                {ok, BranchId} ->
+                    %% Token is part of a parallel branch, increment join counter
+                    NewJoinCounters = increment_join_counter(BranchId, ExecState, UpdatedToken#token.value),
+                    {Tokens, NewJoinCounters};
+                error ->
+                    %% Not part of a parallel branch
+                    {Tokens, ExecState#exec_state.join_counters}
+            end,
 
-    %% Check if all tokens complete
-    ActiveTokens = [T || T <- maps:values(UpdatedTokens2), T#token.status =:= active],
-    case ActiveTokens of
-        [] ->
-            %% No active tokens, executor is done
-            ExecState#exec_state{
-                tokens = UpdatedTokens2,
-                join_counters = UpdatedJoinCounters,
-                status = done,
-                step_count = ExecState#exec_state.step_count + 1
-            };
-        _ ->
-            %% Other tokens still active, select next token
-            NextToken = select_next_token(UpdatedTokens2),
-            ExecState#exec_state{
-                tokens = UpdatedTokens2,
-                join_counters = UpdatedJoinCounters,
-                current_token = NextToken,
-                step_count = ExecState#exec_state.step_count + 1
-            }
+            %% Check if all tokens complete
+            ActiveTokens = [T || T <- maps:values(UpdatedTokens2), T#token.status =:= active],
+            case ActiveTokens of
+                [] ->
+                    %% No active tokens, executor is done
+                    ExecState#exec_state{
+                        tokens = UpdatedTokens2,
+                        join_counters = UpdatedJoinCounters,
+                        status = done,
+                        step_count = ExecState#exec_state.step_count + 1
+                    };
+                _ ->
+                    %% Other tokens still active, select next token
+                    NextToken = select_next_token(UpdatedTokens2),
+                    ExecState#exec_state{
+                        tokens = UpdatedTokens2,
+                        join_counters = UpdatedJoinCounters,
+                        current_token = NextToken,
+                        step_count = ExecState#exec_state.step_count + 1
+                    }
+            end;
+        InstanceId ->
+            %% MI instance, collect result via wf_mi
+            ExecStateWithTokens = ExecState#exec_state{tokens = Tokens},
+            {ExecState2, JoinSatisfied} = wf_mi:collect_result(
+                InstanceId, UpdatedToken#token.value, ExecStateWithTokens
+            ),
+
+            %% If join satisfied and policy is wait_n or first_complete, cancel remaining
+            FinalExecState = case JoinSatisfied of
+                true ->
+                    %% Check join policy (from join counter)
+                    JoinId = find_join_id_for_instance(InstanceId, ExecState2),
+                    JoinCounter = maps:get(JoinId, ExecState2#exec_state.join_counters),
+                    Policy = JoinCounter#join_counter.policy,
+
+                    case Policy of
+                        {first_n, _N} ->
+                            wf_mi:cancel_remaining(InstanceId, ExecState2);
+                        first_complete ->
+                            wf_mi:cancel_remaining(InstanceId, ExecState2);
+                        _Other ->
+                            ExecState2
+                    end;
+                false ->
+                    ExecState2
+            end,
+
+            %% Check if all tokens complete
+            ActiveTokens = [T || T <- maps:values(FinalExecState#exec_state.tokens),
+                                T#token.status =:= active],
+            case ActiveTokens of
+                [] ->
+                    FinalExecState#exec_state{
+                        status = done,
+                        step_count = FinalExecState#exec_state.step_count + 1
+                    };
+                _ ->
+                    NextToken = select_next_token(FinalExecState#exec_state.tokens),
+                    FinalExecState#exec_state{
+                        current_token = NextToken,
+                        step_count = FinalExecState#exec_state.step_count + 1
+                    }
+            end
     end.
 
 %% @doc Find branch for a given token
@@ -580,6 +686,15 @@ find_branch_for_token(TokenId, BranchMap) ->
         [BranchId | _] -> {ok, BranchId};
         [] -> error
     end.
+
+%% @doc Find join ID for instance (helper)
+-spec find_join_id_for_instance(term(), exec_state()) -> term().
+find_join_id_for_instance(InstanceId, ExecState) ->
+    {ok, BranchId} = wf_mi:find_branch_for_instance(
+        InstanceId, ExecState#exec_state.branch_map, ExecState#exec_state.tokens
+    ),
+    BranchInfo = maps:get(BranchId, ExecState#exec_state.branch_map),
+    BranchInfo#branch_info.join_id.
 
 %% @doc Increment join counter when branch completes
 -spec increment_join_counter(term(), exec_state(), term()) -> #{term() => #join_counter{}}.

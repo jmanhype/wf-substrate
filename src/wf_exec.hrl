@@ -1,0 +1,42 @@
+%%%-------------------------------------------------------------------
+%%% @doc wf_exec record definitions
+%%% This header file exports exec_state, token, branch_info, and
+%%% join_counter records for use in tests and other modules.
+%%%-------------------------------------------------------------------
+
+-record(token, {
+    token_id :: term(),
+    ip :: non_neg_integer(),
+    scope_id :: term(),
+    value :: term(),
+    status :: active | complete | cancelled,
+    instance_id :: term() | undefined  %% MI instance ID (undefined for non-MI tokens)
+}).
+
+-record(branch_info, {
+    branch_id :: term(),
+    tokens :: [term()],
+    join_id :: term(),
+    targets :: [non_neg_integer()]
+}).
+
+-record(join_counter, {
+    join_id :: term(),
+    completed :: non_neg_integer(),
+    required :: non_neg_integer(),
+    policy :: wf_vm:join_policy(),
+    results :: [term()]
+}).
+
+-record(exec_state, {
+    ip :: non_neg_integer(),
+    bytecode :: wf_vm:wf_bc(),
+    ctx :: map(),
+    tokens :: #{term() => #token{}},
+    branch_map :: #{term() => #branch_info{}},
+    join_counters :: #{term() => #join_counter{}},
+    scope_stack :: [term()],
+    step_count :: non_neg_integer(),
+    status :: running | done | blocked | cancelled,
+    current_token :: term() | undefined
+}).

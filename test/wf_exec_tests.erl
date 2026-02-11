@@ -1,5 +1,6 @@
 -module(wf_exec_tests).
 -include_lib("eunit/include/eunit.hrl").
+-include("../src/wf_exec.hrl").
 
 %% Mock bytecode generators
 mock_bytecode_simple_task() ->
@@ -236,3 +237,109 @@ nested_cancel_scope_test_() ->
         ?_assertEqual(1, wf_exec:get_scope_stack_depth(ExecState5))   %% [root]
     ].
 
+
+%%====================================================================
+%% Multiple Instance Tests
+%%====================================================================
+
+%% Mock MI bytecode
+mock_bytecode_mi_wait_all() ->
+    [
+        {'MI_SPAWN', {{fixed, 2}, wait_all, 2}},
+        {'TASK_EXEC', task},
+        {'DONE'},
+        {'JOIN_WAIT', wait_all}
+    ].
+
+mock_bytecode_mi_wait_n() ->
+    [
+        {'MI_SPAWN', {{fixed, 3}, {wait_n, 2}, 2}},
+        {'TASK_EXEC', task},
+        {'DONE'},
+        {'JOIN_WAIT', {wait_n, 2}}
+    ].
+
+mock_bytecode_mi_first_complete() ->
+    [
+        {'MI_SPAWN', {{fixed, 3}, first_complete, 2}},
+        {'TASK_EXEC', task},
+        {'DONE'},
+        {'JOIN_WAIT', first_complete}
+    ].
+
+mock_bytecode_mi_fire_and_forget() ->
+    [
+        {'MI_SPAWN', {{fixed, 2}, none, 1}},
+        {'TASK_EXEC', task},
+        {'DONE'}
+    ].
+
+%% Test MI_SPAWN spawns instances
+mi_spawn_test_() ->
+    Bytecode = mock_bytecode_mi_wait_all(),
+    ExecState0 = wf_exec:new(Bytecode),
+    {ExecState1, _Trace1} = wf_exec:step(ExecState0, undefined),
+
+    [
+        ?_assertEqual(2, map_size(ExecState1#exec_state.tokens)),
+        ?_assertEqual(1, map_size(ExecState1#exec_state.join_counters))
+    ].
+
+%% Test MI fire-and-forget creates no join
+mi_spawn_fire_and_forget_test_() ->
+    Bytecode = mock_bytecode_mi_fire_and_forget(),
+    ExecState0 = wf_exec:new(Bytecode),
+    {ExecState1, _Trace1} = wf_exec:step(ExecState0, undefined),
+
+    [
+        ?_assertEqual(2, map_size(ExecState1#exec_state.tokens)),
+        ?_assertEqual(0, map_size(ExecState1#exec_state.join_counters))
+    ].
+
+%% Test MI wait_all execution
+mi_execution_wait_all_test_() ->
+    Bytecode = mock_bytecode_mi_wait_all(),
+    ExecState0 = wf_exec:new(Bytecode),
+    Result = wf_exec:run(ExecState0, 100, undefined),
+
+    [
+        ?_assertMatch({done, _ExecState}, Result)
+    ].
+
+%% Test MI wait_n cancels remaining
+mi_execution_wait_n_test_() ->
+    Bytecode = mock_bytecode_mi_wait_n(),
+    ExecState0 = wf_exec:new(Bytecode),
+    {done, ExecStateDone} = wf_exec:run(ExecState0, 100, undefined),
+
+    %% Verify 1 instance cancelled, 2 completed
+    Tokens = maps:values(ExecStateDone#exec_state.tokens),
+    CancelledCount = lists:foldl(fun(T, Acc) ->
+        case T#token.status of
+            cancelled -> Acc + 1;
+            complete -> Acc
+        end
+    end, 0, Tokens),
+
+    [
+        ?_assertEqual(1, CancelledCount)
+    ].
+
+%% Test MI first_complete cancels all others
+mi_execution_first_complete_test_() ->
+    Bytecode = mock_bytecode_mi_first_complete(),
+    ExecState0 = wf_exec:new(Bytecode),
+    {done, ExecStateDone} = wf_exec:run(ExecState0, 100, undefined),
+
+    %% Verify 2 instances cancelled, 1 completed
+    Tokens = maps:values(ExecStateDone#exec_state.tokens),
+    CancelledCount = lists:foldl(fun(T, Acc) ->
+        case T#token.status of
+            cancelled -> Acc + 1;
+            complete -> Acc
+        end
+    end, 0, Tokens),
+
+    [
+        ?_assertEqual(2, CancelledCount)
+    ].
