@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "id": "031-fix-the-2-remaining-test-failures-in-testwfcaserun",
+  "branch_name": "wreckit/031-fix-the-2-remaining-test-failures-in-testwfcaserun",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Fix enter_state/2 to return gen_statem tuples",
+      "acceptance_criteria": [
+        "enter_state/2 returns {next_state, done, StateData} when TargetState is done",
+        "enter_state/2 returns {next_state, cancelled, StateData} when TargetState is cancelled",
+        "enter_state/2 returns {keep_state, StateData} for all other states",
+        "wf_case_runner transitions from running to done state when execution completes",
+        "Test running_to_done_completion_test/1 passes within 100ms timeout",
+        "No dialyzer warnings introduced by the change"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is the root cause fix for test failure 1. The function currently returns a plain StateData record instead of a gen_statem tuple, preventing proper state transitions. Change src/wf_case_runner.erl lines 391-401."
+    },
+    {
+      "id": "US-002",
+      "title": "Fix done/3 status handler to return consistent status map",
+      "acceptance_criteria": [
+        "done/3 status handler returns StatusInfo map with state, ip, step_count, status, and result keys",
+        "ip field contains the final instruction pointer value from exec_state",
+        "step_count field contains the final step count from exec_state",
+        "status field contains the final executor status (should be 'done')",
+        "result field contains the execution result (backward compatible)",
+        "Test status_query_test/1 passes with assertions for ip and step_count keys",
+        "All 5 tests in wf_case_runner_tests module pass"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "This fixes test failure 2. The done/3 handler currently returns only state and result, missing the ip and step_count fields that the test expects. Change src/wf_case_runner.erl lines 295-298 to follow the same pattern as running/3 handler (lines 205-214)."
+    },
+    {
+      "id": "US-003",
+      "title": "Verify no regressions in related functionality",
+      "acceptance_criteria": [
+        "signal_delivery_test/1 passes without errors",
+        "cancel_test/1 passes and transitions to cancelled state correctly",
+        "trace_configuration_test/1 passes and trace state is updated",
+        "Full test suite passes: rebar3 eunit --module=wf_case_runner_tests",
+        "No test failures in other modules when running rebar3 eunit",
+        "Manual verification of status queries in running, done, and cancelled states"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Run the full test suite after completing US-001 and US-002 to ensure the fixes don't break other tests. Focus on signal handling, cancellation, and trace configuration as those interact with state transitions."
+    }
+  ]
+}
