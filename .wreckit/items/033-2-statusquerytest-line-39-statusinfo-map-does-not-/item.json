@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "033-2-statusquerytest-line-39-statusinfo-map-does-not-",
+  "title": "2. status_query_test (line 39) - StatusInfo map does not contain key `ip`, the status query API returns a different map structure than expected",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T20:40:39.997Z",
+  "updated_at": "2026-02-11T20:40:39.997Z"
+}

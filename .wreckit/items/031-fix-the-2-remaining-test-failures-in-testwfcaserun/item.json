@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "031-fix-the-2-remaining-test-failures-in-testwfcaserun",
+  "title": "Fix the 2 remaining test failures in test/wf_case_runner_tests.erl:",
+  "state": "critique",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T20:40:39.996Z",
+  "updated_at": "2026-02-11T20:49:23.375Z"
+}

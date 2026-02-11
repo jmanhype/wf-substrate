@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "032-1-runningtodonecompletiontest-line-36-genstatem-ca",
+  "title": "1. running_to_done_completion_test (line 36) - gen_statem case_clause error, the wf_case_runner gen_statem is returning unexpected state or message format",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T20:40:39.997Z",
+  "updated_at": "2026-02-11T20:40:39.997Z"
+}
