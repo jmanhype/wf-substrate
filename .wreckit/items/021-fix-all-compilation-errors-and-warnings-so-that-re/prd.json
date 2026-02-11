@@ -16,7 +16,7 @@
         "rebar3 compile completes without 'module not found' errors"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 1: Foundation - must be completed before any compilation issues can be addressed. Misplaced escripts will fail to compile and example modules should not be part of the application."
     },
     {
@@ -29,7 +29,7 @@
         "rebar3 compile succeeds for wf_exec and wf_trace modules"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 2: Critical blocker - wf_trace:259 calls this function but it doesn't exist. Implementation is simple: return a map containing all exec_state fields for tracing."
     },
     {
@@ -54,7 +54,7 @@
         "Pattern matches use underscore for intentionally unused values"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 4a: Warnings are treated as errors due to warnings_as_errors in rebar.config. Unused variables are the most common warning category across 26 modules."
     },
     {
@@ -67,7 +67,7 @@
         "rebar3 compile shows zero unused function/type warnings"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 4b: Some functions are exported for API purposes but not used internally - these need compile directives. Test helpers should be preserved."
     },
     {
@@ -79,7 +79,7 @@
         "rebar3 compile shows zero shadow/match warnings"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 4c: Shadowed variables occur when pattern match variables are reused. Match warnings occur when case/if expressions don't cover all possibilities."
     },
     {
@@ -93,7 +93,7 @@
         "No 'function not exported' warnings"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 5: Xref finds cross-module dependency issues. This is critical for ensuring all function calls have matching implementations and exports."
     },
     {
@@ -106,7 +106,7 @@
         "Escript test files have proper shebang and main/1 function"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 6: Tests can't run until they compile. Common issues: missing eunit.hrl include, incorrect module references, missing helper functions."
     },
     {
@@ -122,7 +122,7 @@
         "Infrastructure tests pass (effects, state, tracing, governance)"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 7: Test failures indicate missing implementations or incorrect test expectations. May need to implement stub functions or fix test logic."
     },
     {
@@ -138,7 +138,7 @@
         "Manual smoke test: basic workflow executes end-to-end"
       ],
       "priority": 4,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 8: Final verification phase. Ensures the entire build pipeline is green and the application is usable. Manual testing confirms basic workflow execution works."
     }
   ]
