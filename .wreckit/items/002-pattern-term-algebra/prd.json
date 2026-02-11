@@ -17,7 +17,7 @@
         "Dialyzer passes with no type errors"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "This is the foundation for all subsequent work. Types must be defined before any constructors can be implemented. Decision: Use -type (transparent) not -opaque for flexibility in testing and compilation."
     },
     {
@@ -34,7 +34,7 @@
         "Dialyzer passes"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Raw constructors are simple tuple creation with no validation. They will be used internally by derived patterns and compiler (item 004)."
     },
     {
@@ -56,7 +56,7 @@
         "Dialyzer passes"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Smart constructors are the public API. They must validate all invariants and throw descriptive errors. Use guards for type checks."
     },
     {
@@ -80,7 +80,7 @@
         "Dialyzer passes"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Validation checks ONLY local structural invariants (branch counts, type formats, scope nesting). Global properties (deadlock, soundness) will be checked by wf_validate in item 013 using bounded model checking."
     },
     {
@@ -101,7 +101,7 @@
         "Dialyzer passes"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Derived patterns are syntactic sugar/combinations of kernel primitives. They must be implemented correctly to produce valid wf_term() structures."
     },
     {
@@ -121,7 +121,7 @@
         "Code coverage > 90% for wf_term.erl"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Tests must be comprehensive, covering both positive and negative cases. Use EUnit test generators for flexible test organization."
     },
     {
@@ -141,7 +141,7 @@
         "Code coverage > 90% for wf_core.erl"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Tests must verify both structure and validity of derived pattern outputs. Use pattern matching in assertions to verify term structure."
     },
     {
@@ -162,7 +162,7 @@
         "Manual review confirms all constructor guards are syntactically correct"
       ],
       "priority": 4,
-      "status": "pending",
+      "status": "done",
       "notes": "Final verification phase ensuring all components are production-ready and integrated properly with existing OTP scaffold."
     }
   ]
