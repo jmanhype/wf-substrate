@@ -32,6 +32,7 @@
     set_ctx/2,
     get_scope_stack_depth/1,
     snapshot_exec_state/1,
+    restore_exec_state/2,
     find_branch_for_token/2
 ]).
 
@@ -101,11 +102,10 @@ get_scope_stack_depth(#exec_state{scope_stack = ScopeStack}) ->
     length(ScopeStack).
 
 %% @doc Snapshot execution state for tracing
-%% Returns a map containing all relevant execution state fields
-%% for tracing and debugging purposes.
--spec snapshot_exec_state(exec_state()) -> map().
+%% Returns a binary serialization of the exec_state for storage in trace events
+-spec snapshot_exec_state(exec_state()) -> binary().
 snapshot_exec_state(ExecState) ->
-    #{
+    StateMap = #{
         ip => ExecState#exec_state.ip,
         bytecode => ExecState#exec_state.bytecode,
         ctx => ExecState#exec_state.ctx,
@@ -117,7 +117,8 @@ snapshot_exec_state(ExecState) ->
         step_count => ExecState#exec_state.step_count,
         status => ExecState#exec_state.status,
         current_token => ExecState#exec_state.current_token
-    }.
+    },
+    term_to_binary(StateMap).
 
 %% @doc Find branch_id for a token in branch_map
 %% Searches through all branches to find which one contains the token
@@ -128,10 +129,61 @@ find_branch_for_token(TokenId, BranchMap) ->
     end,
     case maps:filter(SearchFun, BranchMap) of
         Map when map_size(Map) > 0 ->
-            {BranchId, _BranchInfo} = maps:next(maps:iterator(Map)),
+            [{BranchId, _BranchInfo}] = maps:to_list(Map),
             {ok, BranchId};
         _ ->
             error
+    end.
+
+%% @doc Restore execution state from snapshot binary
+%% Validates that bytecode in snapshot matches provided bytecode
+%% Returns {ok, ExecState} on success, {error, Reason} on failure
+-spec restore_exec_state(binary(), wf_vm:wf_bc()) -> {ok, exec_state()} | {error, term()}.
+restore_exec_state(Binary, Bytecode) ->
+    try
+        StateMap = binary_to_term(Binary),
+
+        %% Validate required fields
+        case maps:is_key(ip, StateMap) andalso
+             maps:is_key(bytecode, StateMap) andalso
+             maps:is_key(ctx, StateMap) andalso
+             maps:is_key(case_id, StateMap) andalso
+             maps:is_key(tokens, StateMap) andalso
+             maps:is_key(branch_map, StateMap) andalso
+             maps:is_key(join_counters, StateMap) andalso
+             maps:is_key(scope_stack, StateMap) andalso
+             maps:is_key(step_count, StateMap) andalso
+             maps:is_key(status, StateMap) andalso
+             maps:is_key(current_token, StateMap) of
+            false ->
+                {error, invalid_snapshot};
+            true ->
+                %% Validate bytecode matches
+                StoredBytecode = maps:get(bytecode, StateMap),
+                case StoredBytecode =:= Bytecode of
+                    false ->
+                        {error, {bytecode_mismatch, {expected, Bytecode, got, StoredBytecode}}};
+                    true ->
+                        %% Bytecode matches, restore exec_state
+                        ExecState = #exec_state{
+                            ip = maps:get(ip, StateMap),
+                            bytecode = maps:get(bytecode, StateMap),
+                            ctx = maps:get(ctx, StateMap),
+                            case_id = maps:get(case_id, StateMap),
+                            tokens = maps:get(tokens, StateMap),
+                            branch_map = maps:get(branch_map, StateMap),
+                            join_counters = maps:get(join_counters, StateMap),
+                            scope_stack = maps:get(scope_stack, StateMap),
+                            step_count = maps:get(step_count, StateMap),
+                            status = maps:get(status, StateMap),
+                            current_token = maps:get(current_token, StateMap)
+                        },
+                        {ok, ExecState}
+                end
+        end
+    catch
+        error:_ ->
+            {error, invalid_snapshot}
     end.
 
 %% @doc Check if executor is in terminal state

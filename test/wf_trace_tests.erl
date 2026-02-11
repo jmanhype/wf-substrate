@@ -33,11 +33,16 @@ trace_level_min_test_() ->
             {'JOIN_WAIT', all}
         ],
         ExecState = wf_exec:new(Bytecode),
-        %% Run a few steps
-        lists:foreach(fun(_) ->
-            {_ExecState1, _} = wf_exec:step(ExecState, undefined),
-            ok
-        end, lists:seq(1, 5)),
+        %% Run a few steps and emit trace events (only if opcode is present)
+        lists:foldl(fun(_, AccExecState) ->
+            {NewExecState, TraceEventMap} = wf_exec:step(AccExecState, undefined),
+            %% Only emit if there's an opcode key (blocked events don't have opcode)
+            case maps:is_key(opcode, TraceEventMap) of
+                true -> ok = wf_trace:emit(AccExecState, TraceEventMap);
+                false -> ok
+            end,
+            NewExecState
+        end, ExecState, lists:seq(1, 5)),
         Events = wf_trace:get_events(State),
         %% Should have only structural events (PAR_FORK, DONE, JOIN_WAIT)
         StructuralEvents = [E || E <- Events,
@@ -51,7 +56,8 @@ trace_level_full_test_() ->
         wf_trace:set_level(full),
         Bytecode = [{'TASK_EXEC', task}, {'DONE'}],
         ExecState = wf_exec:new(Bytecode),
-        {_ExecState1, _} = wf_exec:step(ExecState, undefined),
+        {_ExecState1, TraceEventMap} = wf_exec:step(ExecState, undefined),
+        ok = wf_trace:emit(ExecState, TraceEventMap),
         Events = wf_trace:get_events(State),
         ?assert(length(Events) > 0),
         [FirstEvent | _] = Events,
@@ -172,16 +178,22 @@ filter_opcode_test_() ->
 filter_scope_test_() ->
     fun() ->
         {ok, State} = wf_trace:new(full),
+        wf_trace:set_level(full),
         ExecState = wf_exec:new([
             {'CANCEL_SCOPE', {enter, scope1}},
             {'DONE'},
             {'CANCEL_SCOPE', {exit, scope1}}
         ]),
-        %% Run all steps
-        lists:foreach(fun(_) ->
-            {_ExecState1, _} = wf_exec:step(ExecState, undefined),
-            ok
-        end, lists:seq(1, 4)),
+        %% Run all steps and emit trace events (only if opcode is present)
+        lists:foldl(fun(_, AccExecState) ->
+            {NewExecState, TraceEventMap} = wf_exec:step(AccExecState, undefined),
+            %% Only emit if there's an opcode key
+            case maps:is_key(opcode, TraceEventMap) of
+                true -> ok = wf_trace:emit(AccExecState, TraceEventMap);
+                false -> ok
+            end,
+            NewExecState
+        end, ExecState, lists:seq(1, 4)),
         Events = wf_trace:get_events(State),
         %% Filter by scope_id
         Filtered = wf_trace:filter(Events, {scope, scope1}),
@@ -275,8 +287,16 @@ integration_wf_exec_emits_events_test_() ->
             {'DONE'}
         ],
         ExecState = wf_exec:new(Bytecode),
-        {_ExecState1, _} = wf_exec:step(ExecState, undefined),
-        {_ExecState2, _} = wf_exec:step(_ExecState1, undefined),
+        {ExecState1, TraceEvent1} = wf_exec:step(ExecState, undefined),
+        case maps:is_key(opcode, TraceEvent1) of
+            true -> ok = wf_trace:emit(ExecState, TraceEvent1);
+            false -> ok
+        end,
+        {_ExecState2, TraceEvent2} = wf_exec:step(ExecState1, undefined),
+        case maps:is_key(opcode, TraceEvent2) of
+            true -> ok = wf_trace:emit(ExecState1, TraceEvent2);
+            false -> ok
+        end,
         %% Check that events were emitted
         Events = wf_trace:get_events(get(wf_trace_state)),
         ?assert(length(Events) >= 2),
@@ -297,7 +317,12 @@ integration_step_seq_monotonic_test_() ->
         Bytecode = [{'TASK_EXEC', task}, {'DONE'}],
         ExecState = wf_exec:new(Bytecode),
         lists:foldl(fun(_, AccState) ->
-            {NewState, _} = wf_exec:step(AccState, undefined),
+            {NewState, TraceEventMap} = wf_exec:step(AccState, undefined),
+            %% Only emit if there's an opcode key
+            case maps:is_key(opcode, TraceEventMap) of
+                true -> ok = wf_trace:emit(AccState, TraceEventMap);
+                false -> ok
+            end,
             NewState
         end, ExecState, lists:seq(1, 5)),
         Events = wf_trace:get_events(get(wf_trace_state)),

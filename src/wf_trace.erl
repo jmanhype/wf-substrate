@@ -78,28 +78,27 @@
 %% @doc Create new trace state with specified level
 -spec new(trace_level()) -> {ok, #trace_state{}}.
 new(Level) ->
-    %% Create default ETS table sink
-    %% Check if table already exists (e.g., from previous test in suite)
-    %% Uses standard Erlang pattern: ets:whereis/1 to check for named table
-    Table = case ets:whereis(wf_trace_events) of
-        undefined ->
-            %% Table doesn't exist, create it
-            ets:new(wf_trace_events, [
-                named_table,
-                bag,  %% Allow duplicate events (multiple events per step_seq)
-                public,
-                {read_concurrency, true}
-            ]);
-        _ExistingTableId ->
-            %% Table already exists, reuse it
-            wf_trace_events
+    %% Delete existing table if present (prevents test pollution)
+    case ets:whereis(wf_trace_events) of
+        undefined -> ok;
+        _TableId -> ets:delete(wf_trace_events)
     end,
+
+    %% Create fresh table
+    Table = ets:new(wf_trace_events, [
+        named_table,
+        bag,  %% Allow duplicate events (multiple events per step_seq)
+        public,
+        {read_concurrency, true}
+    ]),
 
     State = #trace_state{
         level = Level,
         sink = {ets, Table},
         case_id = undefined
     },
+    %% Store state in process dictionary for emit/2
+    put(wf_trace_state, State),
     {ok, State}.
 
 %% @doc Set trace level in process dictionary
