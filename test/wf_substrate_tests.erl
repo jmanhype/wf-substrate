@@ -12,5 +12,7 @@
 %%% Test Cases
 %%%===================================================================
 
-%% No tests yet - this module exists to satisfy rebar3 eunit
+%% Dummy test to satisfy EUnit requirement
 %% Test cases will be added as functionality is implemented
+dummy_test_() ->
+    ?_test(begin ok = ok end).

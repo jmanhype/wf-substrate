@@ -216,7 +216,7 @@ step_count_test() ->
     State2 = wf_state:buffer_mutation(State1, increment_step_count),
     {ok, State3, _Receipt} = wf_state:commit(State2),
     %% If we got here without errors, step count was incremented
-    ?assertMatch({ok, _, _}, {ok, State3, _Receipt}).
+    ?assert(is_map(State3)).
 
 %%====================================================================
 %% Case Status Tests (US-001)

@@ -82,6 +82,7 @@
 -export_type([
     wf_bc/0,
     opcode/0,
+    label/0,
     join_policy/0,
     loop_policy/0,
     mi_policy/0

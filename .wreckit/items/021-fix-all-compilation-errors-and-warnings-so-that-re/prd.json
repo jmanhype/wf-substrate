@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "id": "021-fix-all-compilation-errors-and-warnings-so-that-re",
+  "branch_name": "wreckit/021-fix-all-compilation-errors-and-warnings-so-that-re",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Fix file structure and module list",
+      "acceptance_criteria": [
+        "Move debug_test.erl from project root to test/debug_test.escript",
+        "Move demo_pattern_algebra.erl from project root to examples/demo_pattern_algebra.erl",
+        "Move test_governance_simple.erl from project root to test/test_governance_simple.escript",
+        "Add all 26 application modules to wf_substrate.app.src module list",
+        "Remove example modules (wf_example_*.erl) from app module list",
+        "Add dummy test to wf_substrate_tests.erl to satisfy EUnit",
+        "rebar3 compile completes without 'module not found' errors"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Phase 1: Foundation - must be completed before any compilation issues can be addressed. Misplaced escripts will fail to compile and example modules should not be part of the application."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement missing wf_exec:snapshot_exec_state/1 function",
+      "acceptance_criteria": [
+        "Add snapshot_exec_state/1 to wf_exec -export list",
+        "Implement snapshot_exec_state/1 to return map of exec_state fields",
+        "wf_trace:259 compiles without 'undefined function' error",
+        "rebar3 compile succeeds for wf_exec and wf_trace modules"
+      ],
+      "priority": 1,
+      "status": "pending",
+      "notes": "Phase 2: Critical blocker - wf_trace:259 calls this function but it doesn't exist. Implementation is simple: return a map containing all exec_state fields for tracing."
+    },
+    {
+      "id": "US-003",
+      "title": "Fix type exports and opaque type consistency",
+      "acceptance_criteria": [
+        "rebar3 dialyzer completes without type export errors",
+        "All type exports match actual usage across modules",
+        "wf_effect:yield/4 return type properly documented for opaque types",
+        "No 'opaque type accessed' warnings in compilation"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Phase 3: Type consistency - opaque types in wf_effect are by design, but need proper documentation. The {ok, term()} return in yield/4 for cached receipts is intentional for idempotency."
+    },
+    {
+      "id": "US-004",
+      "title": "Fix all unused variable warnings",
+      "acceptance_criteria": [
+        "All unused variables prefixed with underscore (_VarName)",
+        "rebar3 compile shows zero 'unused variable' warnings",
+        "Pattern matches use underscore for intentionally unused values"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Phase 4a: Warnings are treated as errors due to warnings_as_errors in rebar.config. Unused variables are the most common warning category across 26 modules."
+    },
+    {
+      "id": "US-005",
+      "title": "Fix all unused function and type warnings",
+      "acceptance_criteria": [
+        "Unused functions removed or suppressed with compile directive",
+        "Unused types removed from -export_type lists",
+        "Test helper functions preserved with nowarn_unused_function directive",
+        "rebar3 compile shows zero unused function/type warnings"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Phase 4b: Some functions are exported for API purposes but not used internally - these need compile directives. Test helpers should be preserved."
+    },
+    {
+      "id": "US-006",
+      "title": "Fix shadowed variable and match warnings",
+      "acceptance_criteria": [
+        "No variable shadowing warnings in compilation",
+        "Match patterns have explicit catch-all clauses",
+        "rebar3 compile shows zero shadow/match warnings"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "Phase 4c: Shadowed variables occur when pattern match variables are reused. Match warnings occur when case/if expressions don't cover all possibilities."
+    },
+    {
+      "id": "US-007",
+      "title": "Fix xref errors (undefined functions and missing exports)",
+      "acceptance_criteria": [
+        "rebar3 xref completes with zero errors",
+        "All undefined function calls implemented or fixed",
+        "All called functions properly exported",
+        "No 'undefined function' warnings",
+        "No 'function not exported' warnings"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Phase 5: Xref finds cross-module dependency issues. This is critical for ensuring all function calls have matching implementations and exports."
+    },
+    {
+      "id": "US-008",
+      "title": "Fix test module compilation errors",
+      "acceptance_criteria": [
+        "All 48 test modules compile without errors",
+        "Test modules have correct include directives",
+        "Test helper functions properly exported",
+        "Escript test files have proper shebang and main/1 function"
+      ],
+      "priority": 2,
+      "status": "pending",
+      "notes": "Phase 6: Tests can't run until they compile. Common issues: missing eunit.hrl include, incorrect module references, missing helper functions."
+    },
+    {
+      "id": "US-009",
+      "title": "Fix all failing unit and integration tests",
+      "acceptance_criteria": [
+        "rebar3 eunit passes all tests with zero failures",
+        "All 48 test modules execute successfully",
+        "Stub modules (wf_effect_stub) have working implementations",
+        "Test setup/teardown properly initializes application",
+        "Core functionality tests pass (wf_exec, wf_term, wf_core)",
+        "Pattern tests pass (seq, par, discriminator, MI, cancel)",
+        "Infrastructure tests pass (effects, state, tracing, governance)"
+      ],
+      "priority": 3,
+      "status": "pending",
+      "notes": "Phase 7: Test failures indicate missing implementations or incorrect test expectations. May need to implement stub functions or fix test logic."
+    },
+    {
+      "id": "US-010",
+      "title": "Complete full build pipeline verification",
+      "acceptance_criteria": [
+        "rebar3 clean && rebar3 compile succeeds with zero errors/warnings",
+        "rebar3 xref passes with zero errors/warnings",
+        "rebar3 dialyzer passes with zero errors",
+        "rebar3 eunit passes all tests with zero failures",
+        "Application starts cleanly with application:ensure_all_started",
+        "Application stops cleanly with application:stop",
+        "Manual smoke test: basic workflow executes end-to-end"
+      ],
+      "priority": 4,
+      "status": "pending",
+      "notes": "Phase 8: Final verification phase. Ensures the entire build pipeline is green and the application is usable. Manual testing confirms basic workflow execution works."
+    }
+  ]
+}

@@ -187,7 +187,7 @@ cancel_token_and_create_event(State, Token, CancelledEffects) ->
         State,
         {update_token, TokenId, fun(_) -> CancelledToken end}
     ),
-    {ok, State2, _Receipt} = wf_state:commit(State1),
+    {ok, _State2, _Receipt} = wf_state:commit(State1),
 
     %% Create event
     Event = #cancel_activity{
@@ -232,7 +232,7 @@ do_cancel_case(State) ->
 
             %% Mark case status as cancelled
             State2 = wf_state:buffer_mutation(State1, {set_case_status, cancelled}),
-            {ok, State3, _Receipt} = wf_state:commit(State2),
+            {ok, _State3, _Receipt} = wf_state:commit(State2),
 
             %% Create event
             Event = #cancel_case{
@@ -293,7 +293,7 @@ do_cancel_region(State, ScopeId) ->
 
             %% Update scope status to cancelled
             State2 = wf_state:buffer_mutation(State1, {cancel_scope, ScopeId}),
-            {ok, State3, _Receipt} = wf_state:commit(State2),
+            {ok, _State3, _Receipt} = wf_state:commit(State2),
 
             %% Create cancel event
             Event = #cancel_region{

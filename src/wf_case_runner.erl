@@ -190,8 +190,8 @@ running(cast, cancel, StateData) ->
 running(cast, {cancel_region, ScopeId}, StateData) ->
     %% Cancel specific region (emit trace event, continue execution)
     %% TODO: Implement region cancellation logic
-    TraceState0 = StateData#state_data.trace_state,
-    wf_trace:emit(TraceState0, region_cancel, #{scope_id => ScopeId}),
+    ExecState0 = StateData#state_data.exec_state,
+    wf_trace:emit(ExecState0, #{opcode => region_cancel, scope_id => ScopeId}),
     {next_state, running, StateData};
 
 running(cast, {set_trace, Level, Sink}, StateData) ->

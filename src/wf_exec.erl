@@ -30,7 +30,9 @@
     get_ctx/1,
     get_step_count/1,
     set_ctx/2,
-    get_scope_stack_depth/1
+    get_scope_stack_depth/1,
+    snapshot_exec_state/1,
+    find_branch_for_token/2
 ]).
 
 %%====================================================================
@@ -97,6 +99,40 @@ set_ctx(ExecState, Ctx) ->
 -spec get_scope_stack_depth(exec_state()) -> non_neg_integer().
 get_scope_stack_depth(#exec_state{scope_stack = ScopeStack}) ->
     length(ScopeStack).
+
+%% @doc Snapshot execution state for tracing
+%% Returns a map containing all relevant execution state fields
+%% for tracing and debugging purposes.
+-spec snapshot_exec_state(exec_state()) -> map().
+snapshot_exec_state(ExecState) ->
+    #{
+        ip => ExecState#exec_state.ip,
+        bytecode => ExecState#exec_state.bytecode,
+        ctx => ExecState#exec_state.ctx,
+        case_id => ExecState#exec_state.case_id,
+        tokens => ExecState#exec_state.tokens,
+        branch_map => ExecState#exec_state.branch_map,
+        join_counters => ExecState#exec_state.join_counters,
+        scope_stack => ExecState#exec_state.scope_stack,
+        step_count => ExecState#exec_state.step_count,
+        status => ExecState#exec_state.status,
+        current_token => ExecState#exec_state.current_token
+    }.
+
+%% @doc Find branch_id for a token in branch_map
+%% Searches through all branches to find which one contains the token
+-spec find_branch_for_token(term(), #{term() => #branch_info{}}) -> {ok, term()} | error.
+find_branch_for_token(TokenId, BranchMap) ->
+    SearchFun = fun(_BranchId, BranchInfo) ->
+        lists:member(TokenId, BranchInfo#branch_info.tokens)
+    end,
+    case maps:filter(SearchFun, BranchMap) of
+        Map when map_size(Map) > 0 ->
+            {BranchId, _BranchInfo} = maps:next(maps:iterator(Map)),
+            {ok, BranchId};
+        _ ->
+            error
+    end.
 
 %% @doc Check if executor is in terminal state
 -spec is_done(exec_state()) -> boolean().
@@ -816,15 +852,6 @@ execute_done(ExecState) ->
                         step_count = FinalExecState#exec_state.step_count + 1
                     }
             end
-    end.
-
-%% @doc Find branch for a given token
--spec find_branch_for_token(term(), #{term() => #branch_info{}}) -> {ok, term()} | error.
-find_branch_for_token(TokenId, BranchMap) ->
-    case [BranchId || {BranchId, #branch_info{tokens = Tokens}} <- maps:to_list(BranchMap),
-                      lists:member(TokenId, Tokens)] of
-        [BranchId | _] -> {ok, BranchId};
-        [] -> error
     end.
 
 %% @doc Find join ID for instance (helper)

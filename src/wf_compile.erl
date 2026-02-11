@@ -76,6 +76,9 @@
 %% Export main compilation function
 -export([compile/1]).
 
+%% Export label resolution helper functions (may be used by external tools)
+-export([replace_labels/2, resolve_opcode_labels/2, resolve_label/2]).
+
 %%%===================================================================
 %%% Types
 %%%===================================================================

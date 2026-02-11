@@ -75,7 +75,6 @@
 %% Types
 %%====================================================================
 
--type receipt_id() :: term().
 -type effect_id() :: {term(), non_neg_integer(), term()}.
 -type case_id() :: term().
 -type idempotency_key() :: term().

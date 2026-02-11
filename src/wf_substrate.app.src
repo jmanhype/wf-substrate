@@ -10,16 +10,38 @@
    ]},
   {env,[]},
   {modules, [
+    %% Core application
     wf_substrate_app,
     wf_substrate_sup,
     wf_substrate,
-    wf_case_sup,
-    wf_case_runner,
+
+    %% Execution engine
+    wf_vm,
+    wf_term,
+    wf_core,
+    wf_compile,
     wf_exec,
+    wf_case_runner,
+    wf_case_sup,
+
+    %% Scheduling
     wf_sched,
+    wf_sched_deterministic,
+    wf_sched_nondeterministic,
+    wf_sched_replay,
+
+    %% State and effects
     wf_state,
-    wf_trace,
+    wf_effect,
+    wf_receipt,
+
+    %% Patterns and semantics
     wf_mi,
+    wf_cancel,
+    wf_trace,
+    wf_validate,
+
+    %% Governance
     wf_governance,
     wf_budget,
     wf_approval
