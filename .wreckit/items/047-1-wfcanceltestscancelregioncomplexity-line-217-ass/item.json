@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "047-1-wfcanceltestscancelregioncomplexity-line-217-ass",
+  "title": "1. wf_cancel_tests:cancel_region_complexity (line 217) - assertion failure",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T21:41:27.668Z",
+  "updated_at": "2026-02-11T21:41:27.668Z"
+}

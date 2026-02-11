@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "036-fix-all-88-test-failures-across-the-test-suite-the",
   "title": "Fix all 88 test failures across the test suite. The major failing modules are:",
-  "state": "critique",
+  "state": "done",
   "overview": "",
   "branch": null,
   "pr_url": null,
