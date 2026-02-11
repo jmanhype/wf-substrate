@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "id": "007-scheduler-policies",
+  "branch_name": "wreckit/007-scheduler-policies",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Define scheduler behaviour with choose/2 callback",
+      "acceptance_criteria": [
+        "Behaviour callback choose/2 is defined in wf_sched.erl",
+        "Callback signature: choose(EnabledActions, SchedState) -> {Chosen, NewSchedState}",
+        "Type specs for enabled_action(), sched_state(), choice_log(), choice_entry()",
+        "API functions exported: new/2, choose/2, get_log/1, from_log/1",
+        "Module compiles with dialyzer type checking enabled"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Foundation for all policy modules. Must be completed first."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement deterministic scheduler policy",
+      "acceptance_criteria": [
+        "wf_sched_deterministic module implements choose/2 callback",
+        "Stable ordering: same enabled set always produces same choice",
+        "Action type ordering: token < xor_branch",
+        "Token ID ordering via term_to_binary/1 conversion for refs",
+        "XOR branch ordering by numeric index",
+        "Stateless: state unchanged across invocations",
+        "Unit tests verify reproducibility (100+ invocations same choice)"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Deterministic policy is stateless and simplest to implement. Critical for testing reproducibility."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement nondeterministic scheduler policy with choice logging",
+      "acceptance_criteria": [
+        "wf_sched_nondeterministic module implements choose/2 callback",
+        "Random selection using rand:uniform/1",
+        "Configurable seed via new/2 options: {seed, {A, B, C}}",
+        "Choice log format: {step_seq, enabled_set, chosen}",
+        "Log accumulates across multiple choose/2 calls",
+        "Step sequence increments correctly",
+        "get_log/1 returns chronological order (reversed from internal storage)",
+        "Unit tests verify logging completeness",
+        "Seed reproducibility test: same seed produces same sequence"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Adds state management and logging. Foundation for replay capability."
+    },
+    {
+      "id": "US-004",
+      "title": "Implement replay scheduler policy with divergence detection",
+      "acceptance_criteria": [
+        "wf_sched_replay module implements choose/2 callback",
+        "Consumes choices from recorded choice log",
+        "Position tracking in scheduler state",
+        "Divergence detection: enabled set must match recording exactly",
+        "Error on divergence: {divergence, ExpectedSet, ActualSet}",
+        "Error on log exhaustion: {replay_complete, Position}",
+        "Log validation in new/2: chosen action must be in enabled set",
+        "from_log/1 creates replay state from choice log",
+        "Full cycle test: nondeterministic -> log -> replay produces identical choices"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Critical for replay debugging and trace reproduction. Depends on US-003 for choice log format."
+    },
+    {
+      "id": "US-005",
+      "title": "Add comprehensive test coverage for scheduler policies",
+      "acceptance_criteria": [
+        "Unit tests for deterministic policy: stable ordering, token ID ordering, reproducibility",
+        "Unit tests for nondeterministic policy: randomness, logging format, seed reproducibility",
+        "Unit tests for replay policy: exact reproduction, divergence detection, log exhaustion",
+        "API integration tests: new/2, choose/2, get_log/1, from_log/1 for all policies",
+        "Edge case tests: empty enabled set, single action, large enabled sets (100+ actions)",
+        "Property-based tests: deterministic reproducibility, nondeterministic logging completeness",
+        "All tests pass with rebar3 eunit",
+        "Code coverage >90% for wf_sched*.erl modules"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Comprehensive testing ensures reliability and correctness of scheduler policies."
+    },
+    {
+      "id": "US-006",
+      "title": "Maintain backward compatibility with legacy select_action/2",
+      "acceptance_criteria": [
+        "Legacy select_action/2 API preserved in wf_sched.erl",
+        "Deprecation warning logged when select_action/2 called",
+        "Returns mock decisions for backward compatibility with existing code",
+        "Existing wf_exec_tests continue to pass without modification",
+        "Policy normalization: undefined -> deterministic",
+        "Documentation notes deprecation and migration path"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Ensures smooth transition from stub implementation to full scheduler system."
+    },
+    {
+      "id": "US-007",
+      "title": "Document scheduler API and usage patterns",
+      "acceptance_criteria": [
+        "README.md includes scheduler documentation section",
+        "Examples for creating each policy type (deterministic, nondeterministic, replay)",
+        "Usage examples with code snippets",
+        "Migration guide from select_action/2 to new/2 + choose/2",
+        "Dialyzer configuration documented in rebar.config",
+        "All type specs documented with @doc annotations"
+      ],
+      "priority": 4,
+      "status": "done",
+      "notes": "Documentation ensures developers can use scheduler correctly."
+    }
+  ]
+}
