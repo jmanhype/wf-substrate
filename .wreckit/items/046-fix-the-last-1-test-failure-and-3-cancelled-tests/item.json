@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "046-fix-the-last-1-test-failure-and-3-cancelled-tests",
   "title": "Fix the last 1 test failure and 3 cancelled tests:",
-  "state": "critique",
+  "state": "done",
   "overview": "",
   "branch": null,
   "pr_url": null,

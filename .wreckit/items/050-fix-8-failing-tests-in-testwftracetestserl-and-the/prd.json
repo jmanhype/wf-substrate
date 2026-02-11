@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "id": "050-fix-8-failing-tests-in-testwftracetestserl-and-the",
+  "branch_name": "wreckit/050-fix-8-failing-tests-in-testwftracetestserl-and-the",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Fix ETS table reuse in wf_trace:new/1 to prevent test pollution",
+      "acceptance_criteria": [
+        "Modify wf_trace:new/1 to delete existing wf_trace_events table before creating new one",
+        "Use ets:whereis/1 to check if table exists, then ets:delete/1 to remove it",
+        "Create fresh table with same options: [named_table, bag, public, {read_concurrency, true}]",
+        "sink_ets_test passes with correct event count (no pollution from previous tests)",
+        "filter_scope_test passes with correct event count",
+        "filter_predicate_test passes with correct step_seq values",
+        "integration_wf_exec_emits_events_test passes with correct event count",
+        "No 'table already exists' errors in test output"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is the root cause of multiple test failures. The fix is straightforward: delete the table before recreating it. Pattern follows wf_cancel_tests.erl:25 and wf_test_trace_helpers.erl:93."
+    },
+    {
+      "id": "US-002",
+      "title": "Change wf_exec:snapshot_exec_state/1 to return binary() instead of map()",
+      "acceptance_criteria": [
+        "Modify snapshot_exec_state/1 to serialize state map using term_to_binary/1",
+        "Update function spec from '-> map()' to '-> binary()'",
+        "trace_level_full_test assertion ?assert(is_binary(FirstEvent#trace_event.state_before)) passes",
+        "snapshot_serialization_test assertion ?assert(is_binary(Binary)) passes",
+        "No type checker errors after changing return type",
+        "Binary size is reasonable (< 1KB for simple exec_state)"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "The trace_event record expects state_before to be binary() | undefined (wf_trace.hrl:10). Only wf_trace:emit_event/2 calls this function, so breaking changes are minimal."
+    },
+    {
+      "id": "US-003",
+      "title": "Implement wf_exec:restore_exec_state/2 with bytecode validation",
+      "acceptance_criteria": [
+        "Add restore_exec_state/2 function that takes binary() and wf_vm:wf_bc() parameters",
+        "Deserialize binary using binary_to_term/1 inside try/catch",
+        "Validate that all required fields exist in deserialized map",
+        "Validate that bytecode in snapshot matches provided bytecode",
+        "Return {ok, ExecState} on successful validation",
+        "Return {error, {bytecode_mismatch, {expected, Expected, got, Got}}} on bytecode mismatch",
+        "Return {error, invalid_snapshot} on invalid binary or missing fields",
+        "Add function to -export([]) list in wf_exec.erl",
+        "restore_bytecode_mismatch_test passes with correct error format",
+        "restore_invalid_binary_test passes with {error, invalid_snapshot}"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Tests expect this function to exist at lines 133, 145, and 153. Implementation must validate bytecode to detect corruption/mismatch errors."
+    },
+    {
+      "id": "US-004",
+      "title": "Verify all tests pass with 0 failures, 0 cancelled",
+      "acceptance_criteria": [
+        "Run rebar3 eunit --module=wf_trace_tests - all 13 tests pass",
+        "Run rebar3 eunit - full suite passes with 0 failures",
+        "No cancelled tests in output",
+        "Compilation succeeds with no warnings: rebar3 compile",
+        "trace_level_none_test, trace_level_min_test, trace_level_full_test pass",
+        "sink_ets_test, sink_callback_test, sink_process_test pass",
+        "snapshot_serialization_test, restore_bytecode_mismatch_test, restore_invalid_binary_test pass",
+        "filter_opcode_test, filter_scope_test, filter_predicate_test pass",
+        "integration_wf_exec_emits_events_test, integration_step_seq_monotonic_test, integration_case_id_test pass",
+        "to_replay_log_test, from_replay_log_test, from_replay_log_invalid_test, replay_log_smaller_than_trace_test pass"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "This is the verification story. Run full test suite after implementing US-001, US-002, and US-003 to ensure no regressions and all tests pass."
+    }
+  ]
+}
