@@ -41,7 +41,14 @@ wf_state_test_() ->
          {"duplicate_token_test", fun duplicate_token_test/0},
          {"non_existent_scope_test", fun non_existent_scope_test/0},
          {"rollback_after_failed_commit_test", fun rollback_after_failed_commit_test/0},
-         {"step_count_test", fun step_count_test/0}
+         {"step_count_test", fun step_count_test/0},
+         {"case_status_init_test", fun case_status_init_test/0},
+         {"case_status_cancelled_test", fun case_status_cancelled_test/0},
+         {"case_status_done_test", fun case_status_done_test/0},
+         {"case_status_failed_test", fun case_status_failed_test/0},
+         {"case_status_running_test", fun case_status_running_test/0},
+         {"case_status_invalid_test", fun case_status_invalid_test/0},
+         {"case_status_persistence_test", fun case_status_persistence_test/0}
      ]
     }.
 
@@ -210,3 +217,69 @@ step_count_test() ->
     {ok, State3, _Receipt} = wf_state:commit(State2),
     %% If we got here without errors, step count was incremented
     ?assertMatch({ok, _, _}, {ok, State3, _Receipt}).
+
+%%====================================================================
+%% Case Status Tests (US-001)
+%%====================================================================
+
+%% Test case status initialization
+case_status_init_test() ->
+    InitialCtx = #{},
+    {ok, State} = wf_state:new(InitialCtx),
+    ?assertEqual(running, wf_state:get_status(State)).
+
+%% Test case status mutation - cancelled
+case_status_cancelled_test() ->
+    InitialCtx = #{},
+    {ok, State0} = wf_state:new(InitialCtx),
+    State1 = wf_state:buffer_mutation(State0, {set_case_status, cancelled}),
+    {ok, State2, _Receipt} = wf_state:commit(State1),
+    ?assertEqual(cancelled, wf_state:get_status(State2)).
+
+%% Test case status mutation - done
+case_status_done_test() ->
+    InitialCtx = #{},
+    {ok, State0} = wf_state:new(InitialCtx),
+    State1 = wf_state:buffer_mutation(State0, {set_case_status, done}),
+    {ok, State2, _Receipt} = wf_state:commit(State1),
+    ?assertEqual(done, wf_state:get_status(State2)).
+
+%% Test case status mutation - failed
+case_status_failed_test() ->
+    InitialCtx = #{},
+    {ok, State0} = wf_state:new(InitialCtx),
+    State1 = wf_state:buffer_mutation(State0, {set_case_status, failed}),
+    {ok, State2, _Receipt} = wf_state:commit(State1),
+    ?assertEqual(failed, wf_state:get_status(State2)).
+
+%% Test case status mutation - running (back to running)
+case_status_running_test() ->
+    InitialCtx = #{},
+    {ok, State0} = wf_state:new(InitialCtx),
+    State1 = wf_state:buffer_mutation(State0, {set_case_status, cancelled}),
+    {ok, State2, _Receipt1} = wf_state:commit(State1),
+    State3 = wf_state:buffer_mutation(State2, {set_case_status, running}),
+    {ok, State4, _Receipt2} = wf_state:commit(State3),
+    ?assertEqual(running, wf_state:get_status(State4)).
+
+%% Test invalid case status rejected
+case_status_invalid_test() ->
+    InitialCtx = #{},
+    {ok, State0} = wf_state:new(InitialCtx),
+    State1 = wf_state:buffer_mutation(State0, {set_case_status, invalid_status}),
+    Result = wf_state:commit(State1),
+    ?assertMatch({error, {validation_failed, _}}, Result).
+
+%% Test case status persistence in ETS
+case_status_persistence_test() ->
+    InitialCtx = #{},
+    {ok, State0} = wf_state:new(InitialCtx),
+    State1 = wf_state:buffer_mutation(State0, {set_case_status, cancelled}),
+    {ok, State2, _Receipt} = wf_state:commit(State1),
+
+    %% Restore from ETS using the getter function
+    CaseId = wf_state:get_case_id(State2),
+    {ok, RestoredState} = wf_state:restore_from_ets(CaseId),
+
+    %% Verify status persisted
+    ?assertEqual(cancelled, wf_state:get_status(RestoredState)).

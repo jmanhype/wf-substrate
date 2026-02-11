@@ -19,7 +19,7 @@
         "Add unit tests for status persistence in ETS snapshots"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Foundational work - case status is required for case cancellation. All three cancellation types depend on this field being present in the state record."
     },
     {
@@ -41,7 +41,7 @@
         "Add tests for is_cancelled/2 with active/cancelled/undefined scopes"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Establishes the module skeleton. All subsequent stories build on this foundation. Type definitions ensure API consistency."
     },
     {
@@ -63,7 +63,7 @@
         "Add unit tests for scope isolation invariant (unrelated scopes unaffected)"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Core cancellation logic. Uses scope#tokens list for efficiency. All other cancellations build on this pattern."
     },
     {
@@ -82,7 +82,7 @@
         "Add unit tests for invariants failing when state corrupted"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Invariant checks ensure state consistency. Called by tests to verify cancellation doesn't corrupt unrelated scopes."
     },
     {
@@ -104,7 +104,7 @@
         "Add unit tests for invariants passing after activity cancellation"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Activity cancellation requires token lookup by task_id. O(n) scan is acceptable for v1. Document for v2 optimization with task_id→token_id index."
     },
     {
@@ -124,7 +124,7 @@
         "Add unit tests for case cancellation with 100 tokens (performance)"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Case cancellation marks workflow as cancelled (terminal state). Executor must respect cancelled status and stop execution."
     },
     {
@@ -140,7 +140,7 @@
         "Verify no regressions in existing wf_exec_tests (cancel_scope tests still pass)"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "wf_exec integration is limited by inline state. propagate_cancellation/2 delegates to wf_cancel, but is_scope_cancelled/2 remains stub. Future refactoring to add wf_state field will complete integration."
     },
     {
@@ -159,7 +159,7 @@
         "Add performance benchmarks: complexity isolation (10000 total, 10 in scope) < 1ms"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Comprehensive testing ensures correctness and performance. Nested scope tests verify scope hierarchy handling."
     },
     {
@@ -178,7 +178,7 @@
         "Run coverage: rebar3 cover (> 90%)"
       ],
       "priority": 4,
-      "status": "pending",
+      "status": "done",
       "notes": "Final phase. Ensure documentation is complete and all automated checks pass before considering implementation complete."
     }
   ]

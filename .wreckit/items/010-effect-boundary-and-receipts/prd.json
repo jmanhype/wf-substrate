@@ -171,7 +171,7 @@
         "Test coverage > 80%"
       ],
       "priority": 3,
-      "status": "pending",
+      "status": "done",
       "notes": "Optional v1 enhancement. Property-based tests ensure invariants hold."
     },
     {

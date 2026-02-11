@@ -7,7 +7,7 @@
   "branch": null,
   "pr_url": null,
   "pr_number": null,
-  "last_error": null,
+  "last_error": "Merge conflict detected: wreckit/002-pattern-term-algebra cannot be cleanly merged into main. Please resolve conflicts manually or rebase the feature branch.",
   "created_at": "2026-02-10T00:00:00.000Z",
-  "updated_at": "2026-02-11T18:12:14.524Z"
+  "updated_at": "2026-02-11T18:12:15.040Z"
 }
