@@ -42,7 +42,7 @@
         "No 'opaque type accessed' warnings in compilation"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 3: Type consistency - opaque types in wf_effect are by design, but need proper documentation. The {ok, term()} return in yield/4 for cached receipts is intentional for idempotency."
     },
     {
