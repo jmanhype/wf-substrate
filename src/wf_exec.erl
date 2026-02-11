@@ -30,7 +30,7 @@
     ip :: non_neg_integer(),
     scope_id :: term(),
     value :: term(),
-    status :: active | complete | cancelled
+    status :: active | complete | cancelled | blocked_effect | blocked_approval
 }).
 
 %% Branch info: Parallel branch tracking
@@ -135,7 +135,8 @@ is_done(#exec_state{status = Status}) ->
 is_blocked(#exec_state{status = Status}) ->
     Status =:= blocked_effect orelse
     Status =:= blocked_join orelse
-    Status =:= blocked_signal.
+    Status =:= blocked_signal orelse
+    Status =:= blocked_approval.
 
 %% @doc Execute single reduction step
 -spec step(exec_state(), term()) -> {exec_state(), map()}.

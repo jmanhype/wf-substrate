@@ -2,12 +2,12 @@
   "schema_version": 1,
   "id": "019-security-and-governance",
   "title": "Implement security and governance features",
-  "state": "idea",
+  "state": "implementing",
   "overview": "Implement governance and safety features for production use:\n\n1. Tool/effect allowlist per scope: each cancel scope (or the top-level case) can define an allowlist of permitted effect types. Effects not on the allowlist are rejected with a structured error. Implemented in wf_effect.erl as a check before yielding.\n\n2. Maximum effect budget per case: configurable limits on effect count (max N effects per case), total effect time (max T microseconds of effect execution), and cost stub (each effect type has an integer cost, total cost capped at C). Budget tracking in wf_state.erl, enforcement in wf_effect.erl. Budget exhaustion produces a structured budget_exceeded error.\n\n3. Timeout policies: per-case timeout (overall wall time), per-task timeout (individual task execution time), per-effect timeout (effect response time). Timeouts produce structured timeout events and can trigger cancellation. Implemented via gen_statem state_timeout and erlang:send_after.\n\n4. Mandatory approval points: a task can be marked as requiring explicit external signal before proceeding (approval gate). The executor yields {waiting_approval, ApprovalSpec} and blocks until signal/2 is called with matching approval. Timeout on approval triggers configurable action (cancel, default, escalate).\n\n5. Guard failure handling: structured error records for all governance violations. Each error includes: error_type, scope, task_id, detail, timestamp. Errors are recorded as receipts. Guards never silently pass — they either allow or produce a structured rejection.\n\nExport: set_allowlist/2, set_budget/2, check_budget/1, set_timeout_policy/2, require_approval/2.",
   "branch": null,
   "pr_url": null,
   "pr_number": null,
   "last_error": null,
   "created_at": "2026-02-10T00:00:00.000Z",
-  "updated_at": "2026-02-10T00:00:00.000Z"
+  "updated_at": "2026-02-11T17:08:06.510Z"
 }

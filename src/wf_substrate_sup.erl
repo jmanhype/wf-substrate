@@ -43,7 +43,26 @@ init([]) ->
     SupFlags = #{strategy => one_for_one,
                  intensity => 10,
                  period => 60},
-    ChildSpecs = [],
+    ChildSpecs = [
+        #{id => wf_governance,
+          start => {wf_governance, start_link, []},
+          restart => permanent,
+          shutdown => 5000,
+          type => worker,
+          modules => [wf_governance]},
+        #{id => wf_budget,
+          start => {wf_budget, start_link, []},
+          restart => permanent,
+          shutdown => 5000,
+          type => worker,
+          modules => [wf_budget]},
+        #{id => wf_approval,
+          start => {wf_approval, start_link, []},
+          restart => permanent,
+          shutdown => 5000,
+          type => worker,
+          modules => [wf_approval]}
+    ],
     {ok, {SupFlags, ChildSpecs}}.
 
 %%%===================================================================
