@@ -46,7 +46,7 @@
         "Running test suite multiple times produces consistent results"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "This is the verification phase that confirms the fix works. Must check for nested setup compatibility (cancel_region_test_ already has setup wrapper)."
     }
   ]
