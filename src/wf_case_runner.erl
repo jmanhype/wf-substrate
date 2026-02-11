@@ -147,7 +147,10 @@ init([CaseId, Bytecode, Options]) ->
         result = undefined
     },
 
-    %% Transition to running state (initializing complete)
+    %% Transition to running state and trigger first execution via self-cast
+    Self = self(),
+    Self ! {start_execution},
+    Timeout = maps:get(timeout, StateData#state_data.options, 5000),
     {ok, running, StateData, [{state_timeout, Timeout, overall_timeout}]}.
 
 %% @private Initializing state: setup complete, transition to running
@@ -164,21 +167,35 @@ initializing(cast, {set_trace, Level, Sink}, StateData) ->
     put(wf_trace_state, TraceState2),
     {next_state, initializing, StateData#state_data{trace_state = TraceState2}};
 
-initializing(info, Msg, _StateData) ->
+initializing(info, Msg, StateData) ->
     log_unexpected_message(initializing, Msg),
-    {keep_state_and_data};
+    {keep_state, StateData};
 
 initializing(EventType, EventContent, StateData) ->
     handle_common_event(EventType, EventContent, initializing, StateData).
 
 %% @private Running state: execute bytecode quanta
+running(info, {start_execution}, StateData) ->
+    %% First execution triggered by init
+    Result = execute_quantum(StateData),
+    %% execute_quantum may return a gen_statem tuple for state changes
+    case element(1, Result) of
+        next_state -> Result;
+        _ -> {next_state, running, Result}
+    end;
+
 running(cast, {signal, Signal}, StateData) ->
     %% Handle external signal
     ExecState0 = StateData#state_data.exec_state,
     Ctx0 = ExecState0#exec_state.ctx,
     Ctx1 = maps:put(last_signal, Signal, Ctx0),
     ExecState1 = ExecState0#exec_state{ctx = Ctx1},
-    {next_state, running, execute_quantum(StateData#state_data{exec_state = ExecState1})};
+    Result = execute_quantum(StateData#state_data{exec_state = ExecState1}),
+    %% execute_quantum may return a gen_statem tuple for state changes
+    case element(1, Result) of
+        next_state -> Result;
+        _ -> {next_state, running, Result}
+    end;
 
 running(cast, cancel, StateData) ->
     %% Cancel entire case
@@ -211,17 +228,17 @@ running({call, From}, status, StateData) ->
         step_count => ExecState#exec_state.step_count,
         status => ExecState#exec_state.status
     },
-    {keep_state_and_data, [{reply, From, {ok, running, StatusInfo}}]};
+    {keep_state, StateData, [{reply, From, {ok, running, StatusInfo}}]};
 
 running(state_timeout, overall_timeout, StateData) ->
     %% Overall case timeout
     notify_done(StateData#state_data.caller_pid, {error, timeout}),
     {next_state, cancelled, StateData};
 
-running(info, Msg, _StateData) ->
+running(info, Msg, StateData) ->
     %% Handle unexpected info messages
     log_unexpected_message(running, Msg),
-    {keep_state_and_data};
+    {keep_state, StateData};
 
 running(EventType, EventContent, StateData) ->
     handle_common_event(EventType, EventContent, running, StateData).
@@ -229,7 +246,12 @@ running(EventType, EventContent, StateData) ->
 %% @private Waiting for effect response
 waiting_effect(cast, {effect_response, _Result}, StateData) ->
     %% Resume execution with effect result
-    {next_state, running, execute_quantum(StateData)};
+    Result = execute_quantum(StateData),
+    %% execute_quantum may return a gen_statem tuple for state changes
+    case element(1, Result) of
+        next_state -> Result;
+        _ -> {next_state, running, Result}
+    end;
 
 waiting_effect(cast, cancel, StateData) ->
     %% Cancel while waiting for effect
@@ -241,9 +263,9 @@ waiting_effect(state_timeout, overall_timeout, StateData) ->
     notify_done(StateData#state_data.caller_pid, {error, timeout}),
     {next_state, cancelled, StateData};
 
-waiting_effect(info, Msg, _StateData) ->
+waiting_effect(info, Msg, StateData) ->
     log_unexpected_message(waiting_effect, Msg),
-    {keep_state_and_data};
+    {keep_state, StateData};
 
 waiting_effect(EventType, EventContent, StateData) ->
     handle_common_event(EventType, EventContent, waiting_effect, StateData).
@@ -255,7 +277,12 @@ waiting_signal(cast, {signal, Signal}, StateData) ->
     Ctx0 = ExecState0#exec_state.ctx,
     Ctx1 = maps:put(last_signal, Signal, Ctx0),
     ExecState1 = ExecState0#exec_state{ctx = Ctx1},
-    {next_state, running, execute_quantum(StateData#state_data{exec_state = ExecState1})};
+    Result = execute_quantum(StateData#state_data{exec_state = ExecState1}),
+    %% execute_quantum may return a gen_statem tuple for state changes
+    case element(1, Result) of
+        next_state -> Result;
+        _ -> {next_state, running, Result}
+    end;
 
 waiting_signal(cast, cancel, StateData) ->
     %% Cancel while waiting for signal
@@ -267,9 +294,9 @@ waiting_signal(state_timeout, overall_timeout, StateData) ->
     notify_done(StateData#state_data.caller_pid, {error, timeout}),
     {next_state, cancelled, StateData};
 
-waiting_signal(info, Msg, _StateData) ->
+waiting_signal(info, Msg, StateData) ->
     log_unexpected_message(waiting_signal, Msg),
-    {keep_state_and_data};
+    {keep_state, StateData};
 
 waiting_signal(EventType, EventContent, StateData) ->
     handle_common_event(EventType, EventContent, waiting_signal, StateData).
@@ -279,27 +306,44 @@ cancelled(cast, cancel, StateData) ->
     %% Already cancelled
     {stop, normal, StateData};
 
-cancelled({call, From}, status, _StateData) ->
+cancelled({call, From}, status, StateData) ->
     %% Return cancelled status
-    StatusInfo = #{state => cancelled},
-    {keep_state_and_data, [{reply, From, {ok, cancelled, StatusInfo}}]};
+    ExecState = StateData#state_data.exec_state,
+    StatusInfo = #{
+        state => cancelled,
+        ip => ExecState#exec_state.ip,
+        step_count => ExecState#exec_state.step_count,
+        status => ExecState#exec_state.status
+    },
+    {keep_state, StateData, [{reply, From, {ok, cancelled, StatusInfo}}]};
 
-cancelled(info, Msg, _StateData) ->
+cancelled(info, Msg, StateData) ->
     log_unexpected_message(cancelled, Msg),
-    {keep_state_and_data};
+    {keep_state, StateData};
 
 cancelled(EventType, EventContent, StateData) ->
     handle_common_event(EventType, EventContent, cancelled, StateData).
 
 %% @private Done state: return result and terminate
-done({call, From}, status, StateData) ->
-    %% Return done status with result
-    StatusInfo = #{state => done, result => StateData#state_data.result},
-    {keep_state_and_data, [{reply, From, {ok, done, StatusInfo}}]};
+done(cast, cancel, StateData) ->
+    %% Already done, ignore cancel or transition to cancelled
+    {next_state, cancelled, StateData};
 
-done(info, Msg, _StateData) ->
+done({call, From}, status, StateData) ->
+    %% Return done status with result and execution info
+    ExecState = StateData#state_data.exec_state,
+    StatusInfo = #{
+        state => done,
+        ip => ExecState#exec_state.ip,
+        step_count => ExecState#exec_state.step_count,
+        status => ExecState#exec_state.status,
+        result => StateData#state_data.result
+    },
+    {keep_state, StateData, [{reply, From, {ok, done, StatusInfo}}]};
+
+done(info, Msg, StateData) ->
     log_unexpected_message(done, Msg),
-    {keep_state_and_data};
+    {keep_state, StateData};
 
 done(EventType, EventContent, StateData) ->
     handle_common_event(EventType, EventContent, done, StateData).
@@ -313,10 +357,10 @@ handle_common_event({call, From}, status, CurrentState, StateData) ->
         step_count => ExecState#exec_state.step_count,
         status => ExecState#exec_state.status
     },
-    {keep_state_and_data, [{reply, From, {ok, CurrentState, StatusInfo}}]};
+    {keep_state, StateData, [{reply, From, {ok, CurrentState, StatusInfo}}]};
 
-handle_common_event(_EventType, _EventContent, _CurrentState, _StateData) ->
-    {keep_state_and_data}.
+handle_common_event(_EventType, _EventContent, _CurrentState, StateData) ->
+    {keep_state, StateData}.
 
 %% @private gen_statem terminate
 terminate(_Reason, _StateName, #state_data{case_id = CaseId}) ->
@@ -389,16 +433,12 @@ execute_quantum(StateData) ->
     end.
 
 %% @doc Transition to new state
-enter_state(TargetState, StateData) ->
-    %% Set state timeout if not done/cancelled
-    case TargetState of
-        done ->
-            StateData;
-        cancelled ->
-            StateData;
-        _Other ->
-            StateData
-    end.
+enter_state(done, StateData) ->
+    {next_state, done, StateData};
+enter_state(cancelled, StateData) ->
+    {next_state, cancelled, StateData};
+enter_state(_Other, StateData) ->
+    {keep_state, StateData}.
 
 %% @doc Notify caller of completion
 -spec notify_done(pid() | undefined, term()) -> ok.
