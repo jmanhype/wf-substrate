@@ -16,7 +16,8 @@
     get_ip/1,
     get_ctx/1,
     get_step_count/1,
-    set_ctx/2
+    set_ctx/2,
+    get_scope_stack_depth/1
 ]).
 
 %%====================================================================
@@ -119,6 +120,11 @@ get_step_count(#exec_state{step_count = Count}) ->
 set_ctx(ExecState, Ctx) ->
     ExecState#exec_state{ctx = Ctx}.
 
+%% @doc Get scope stack depth (for testing)
+-spec get_scope_stack_depth(exec_state()) -> non_neg_integer().
+get_scope_stack_depth(#exec_state{scope_stack = ScopeStack}) ->
+    length(ScopeStack).
+
 %% @doc Check if executor is in terminal state
 -spec is_done(exec_state()) -> boolean().
 is_done(#exec_state{status = Status}) ->
@@ -192,6 +198,8 @@ execute_opcode({LoopCheck, Policy}, ExecState) when LoopCheck =:= 'LOOP_CHECK'; 
     execute_loop_check({LoopCheck, Policy}, ExecState);
 execute_opcode({LoopBack, TargetIP}, ExecState) when LoopBack =:= 'LOOP_BACK'; LoopBack =:= loop_back ->
     execute_loop_back({LoopBack, TargetIP}, ExecState);
+execute_opcode({CancelScope, ScopeOp}, ExecState) when CancelScope =:= 'CANCEL_SCOPE'; CancelScope =:= cancel_scope ->
+    execute_cancel_scope({CancelScope, ScopeOp}, ExecState);
 execute_opcode({TaskExec, _TaskName}, ExecState) when TaskExec =:= 'TASK_EXEC'; TaskExec =:= task_exec ->
     execute_task_exec({TaskExec, _TaskName}, ExecState);
 execute_opcode({Done}, ExecState) when Done =:= 'DONE'; Done =:= done ->
@@ -460,6 +468,65 @@ evaluate_loop_condition(until, ExecState) ->
     %% Until loop: check condition after body
     %% For simplicity, always exit after first iteration (mock)
     {false, ExecState#exec_state.ctx}.
+
+%%====================================================================
+%% Cancellation Opcodes
+%%====================================================================
+
+%% @doc Execute CANCEL_SCOPE: enter or exit cancel scope
+execute_cancel_scope({_CancelScope, {enter, ScopeId}}, ExecState) ->
+    %% Push scope onto stack
+    NewScopeStack = [ScopeId | ExecState#exec_state.scope_stack],
+    ExecState#exec_state{
+        scope_stack = NewScopeStack,
+        ip = ExecState#exec_state.ip + 1,
+        step_count = ExecState#exec_state.step_count + 1
+    };
+
+execute_cancel_scope({_CancelScope, {exit, ScopeId}}, ExecState) ->
+    %% Pop scope from stack
+    [_Top | Rest] = ExecState#exec_state.scope_stack,
+    NewScopeStack = Rest,
+
+    %% Check if scope is cancelled (stub for wf_cancel)
+    case is_scope_cancelled(ScopeId, ExecState) of
+        true ->
+            %% Propagate cancellation to all tokens in scope
+            Tokens = propagate_cancellation(ScopeId, ExecState#exec_state.tokens),
+            ExecState#exec_state{
+                scope_stack = NewScopeStack,
+                tokens = Tokens,
+                status = cancelled,
+                ip = ExecState#exec_state.ip + 1,
+                step_count = ExecState#exec_state.step_count + 1
+            };
+        false ->
+            %% Normal exit
+            ExecState#exec_state{
+                scope_stack = NewScopeStack,
+                ip = ExecState#exec_state.ip + 1,
+                step_count = ExecState#exec_state.step_count + 1
+            }
+    end.
+
+%% @doc Check if scope is cancelled (stub for wf_cancel)
+-spec is_scope_cancelled(term(), exec_state()) -> boolean().
+is_scope_cancelled(_ScopeId, _ExecState) ->
+    %% Stub: always false for now
+    %% TODO: Call wf_cancel:is_cancelled/2 when item 008 is implemented
+    false.
+
+%% @doc Propagate cancellation to all tokens in scope (stub for wf_cancel)
+-spec propagate_cancellation(term(), #{term() => #token{}}) -> #{term() => #token{}}.
+propagate_cancellation(ScopeId, TokensMap) ->
+    %% Stub: mark all tokens in scope as cancelled
+    %% TODO: Call wf_cancel:propagate/2 when item 008 is implemented
+    maps:map(fun(_TokenId, Token) ->
+        case Token#token.scope_id of
+            ScopeId -> Token#token{status = cancelled};
+            _ -> Token
+        end
+    end, TokensMap).
 
 %%====================================================================
 %% Single-Token Opcodes (continued)

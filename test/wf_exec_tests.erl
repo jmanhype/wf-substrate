@@ -179,3 +179,60 @@ loop_back_jump_test_() ->
         ?_assertEqual(1, wf_exec:get_ip(ExecState5))   %% Advanced to body again (IP 1)
     ].
 
+%%====================================================================
+%% Phase 5 Tests: Cancellation Support
+%%====================================================================
+
+%% Mock bytecode for cancel scope
+mock_bytecode_cancel() ->
+    [
+        {'CANCEL_SCOPE', {enter, scope1}},
+        {'TASK_EXEC', task_a},
+        {'CANCEL_SCOPE', {exit, scope1}},
+        {'DONE'}
+    ].
+
+%% Test cancel scope enter and exit
+cancel_scope_test_() ->
+    Bytecode = mock_bytecode_cancel(),
+    ExecState0 = wf_exec:new(Bytecode),
+    %% Execute CANCEL_SCOPE enter
+    {ExecState1, _Trace1} = wf_exec:step(ExecState0, undefined),
+    %% Execute TASK_EXEC
+    {ExecState2, _Trace2} = wf_exec:step(ExecState1, undefined),
+    %% Execute CANCEL_SCOPE exit
+    {ExecState3, _Trace3} = wf_exec:step(ExecState2, undefined),
+    [
+        ?_assertEqual(2, wf_exec:get_scope_stack_depth(ExecState1)),  %% [root, scope1]
+        ?_assertEqual(1, wf_exec:get_scope_stack_depth(ExecState3)),  %% [root]
+        ?_assertNot(wf_exec:is_done(ExecState3))  %% Still running
+    ].
+
+%% Test nested cancel scopes
+nested_cancel_scope_test_() ->
+    Bytecode = [
+        {'CANCEL_SCOPE', {enter, scope1}},
+        {'CANCEL_SCOPE', {enter, scope2}},
+        {'TASK_EXEC', task_a},
+        {'CANCEL_SCOPE', {exit, scope2}},
+        {'CANCEL_SCOPE', {exit, scope1}},
+        {'DONE'}
+    ],
+    ExecState0 = wf_exec:new(Bytecode),
+    %% Execute enter scope1
+    {ExecState1, _Trace1} = wf_exec:step(ExecState0, undefined),
+    %% Execute enter scope2
+    {ExecState2, _Trace2} = wf_exec:step(ExecState1, undefined),
+    %% Execute TASK_EXEC
+    {ExecState3, _Trace3} = wf_exec:step(ExecState2, undefined),
+    %% Execute exit scope2
+    {ExecState4, _Trace4} = wf_exec:step(ExecState3, undefined),
+    %% Execute exit scope1
+    {ExecState5, _Trace5} = wf_exec:step(ExecState4, undefined),
+    [
+        ?_assertEqual(2, wf_exec:get_scope_stack_depth(ExecState1)),  %% [root, scope1]
+        ?_assertEqual(3, wf_exec:get_scope_stack_depth(ExecState2)),  %% [root, scope1, scope2]
+        ?_assertEqual(2, wf_exec:get_scope_stack_depth(ExecState4)),  %% [root, scope1]
+        ?_assertEqual(1, wf_exec:get_scope_stack_depth(ExecState5))   %% [root]
+    ].
+
