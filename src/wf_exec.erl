@@ -2,10 +2,18 @@
 
 %% Bytecode executor for workflow patterns
 %% Hot loop with cooperative scheduling
+%%
+%% Cancellation Integration:
+%% - is_scope_cancelled/2 checks if scope is cancelled (stub for now)
+%% - propagate_cancellation/2 delegates to wf_cancel:propagate/2
+%% - TODO: Integrate with wf_state:state() when executor refactored
+%%
 
 %% Include record definitions
 -include("wf_mi.hrl").
 -include("wf_exec.hrl").
+-include("wf_effect.hrl").
+-include("wf_receipt.hrl").
 
 %%====================================================================
 %% API
@@ -26,50 +34,6 @@
 ]).
 
 %%====================================================================
-%% Records
-%%====================================================================
-
-%% Token: Logical thread of execution
--record(token, {
-    token_id :: term(),
-    ip :: non_neg_integer(),
-    scope_id :: term(),
-    value :: term(),
-    status :: active | complete | cancelled | blocked_effect | blocked_approval
-}).
-
-%% Branch info: Parallel branch tracking
--record(branch_info, {
-    branch_id :: term(),
-    tokens :: [term()],
-    join_id :: term(),
-    targets :: [non_neg_integer()]
-}).
-
-%% Join counter: Join synchronization state
--record(join_counter, {
-    join_id :: term(),
-    completed :: non_neg_integer(),
-    required :: non_neg_integer(),
-    policy :: wf_vm:join_policy(),
-    results :: [term()]
-}).
-
-%% Execution state record
--record(exec_state, {
-    ip :: non_neg_integer(),
-    bytecode :: wf_vm:wf_bc(),
-    ctx :: map(),
-    tokens :: #{term() => #token{}},
-    branch_map :: #{term() => #branch_info{}},
-    join_counters :: #{term() => #join_counter{}},
-    scope_stack :: [term()],
-    step_count :: non_neg_integer(),
-    status :: running | done | blocked | cancelled,
-    current_token :: term() | undefined
-}).
-
-%%====================================================================
 %% Types
 %%====================================================================
 
@@ -83,6 +47,7 @@
 %% @doc Create new executor from bytecode
 -spec new(wf_vm:wf_bc()) -> exec_state().
 new(Bytecode) ->
+    CaseId = make_ref(),  %% Generate case_id for effect IDs
     InitialTokenId = make_ref(),
     RootScopeId = root,
     InitialToken = #token{
@@ -91,12 +56,14 @@ new(Bytecode) ->
         scope_id = RootScopeId,
         value = undefined,
         status = active,
-        instance_id = undefined
+        instance_id = undefined,
+        current_effect = undefined
     },
     #exec_state{
         ip = 0,
         bytecode = Bytecode,
         ctx = #{},
+        case_id = CaseId,
         tokens = #{InitialTokenId => InitialToken},
         branch_map = #{},
         join_counters = #{},
@@ -147,6 +114,71 @@ is_blocked(#exec_state{status = Status}) ->
 %% @doc Execute single reduction step
 -spec step(exec_state(), term()) -> {exec_state(), map()}.
 step(ExecState, SchedDecision) ->
+    case ExecState#exec_state.status of
+        blocked_effect ->
+            step_check_effect(ExecState, SchedDecision);
+        _ ->
+            step_normal(ExecState, SchedDecision)
+    end.
+
+%% @private Check effect completion (blocked_effect path)
+step_check_effect(ExecState, _SchedDecision) ->
+    CurrentToken = ExecState#exec_state.current_token,
+    Token = maps:get(CurrentToken, ExecState#exec_state.tokens),
+    EffectId = Token#token.current_effect,
+
+    case wf_effect:get_result(EffectId) of
+        {ok, Result} ->
+            %% Effect completed, resume task
+            NewCtx = maps:put(effect_result, Result, ExecState#exec_state.ctx),
+            UpdatedToken = Token#token{
+                status = active,
+                current_effect = undefined
+            },
+            Tokens = maps:put(CurrentToken, UpdatedToken, ExecState#exec_state.tokens),
+
+            TraceEvent = #{
+                type => effect_complete,
+                effect_id => EffectId,
+                result => Result
+            },
+            {ExecState#exec_state{tokens = Tokens, status = running, ctx = NewCtx}, TraceEvent};
+        {cancelled, Reason} ->
+            %% Effect cancelled, propagate cancellation
+            UpdatedToken = Token#token{
+                status = cancelled,
+                current_effect = undefined
+            },
+            Tokens = maps:put(CurrentToken, UpdatedToken, ExecState#exec_state.tokens),
+
+            TraceEvent = #{
+                type => effect_cancelled,
+                effect_id => EffectId,
+                reason => Reason
+            },
+            {ExecState#exec_state{tokens = Tokens, status = cancelled}, TraceEvent};
+        {error, Reason} ->
+            %% Effect failed
+            UpdatedToken = Token#token{
+                status = failed,
+                current_effect = undefined
+            },
+            Tokens = maps:put(CurrentToken, UpdatedToken, ExecState#exec_state.tokens),
+
+            TraceEvent = #{
+                type => effect_failed,
+                effect_id => EffectId,
+                reason => Reason
+            },
+            {ExecState#exec_state{tokens = Tokens, status = failed}, TraceEvent};
+        pending ->
+            %% Effect still pending, yield
+            TraceEvent = #{type => blocked_effect, effect_id => EffectId},
+            {ExecState, TraceEvent}
+    end.
+
+%% @private Normal step (not blocked)
+step_normal(ExecState, SchedDecision) ->
     Opcode = fetch_opcode(ExecState),
     NewExecState = execute_opcode(Opcode, ExecState, SchedDecision),
     TraceEvent = #{opcode => Opcode, step_count => NewExecState#exec_state.step_count},
@@ -257,6 +289,9 @@ execute_task_exec({_TaskExec, _TaskName}, ExecState) ->
     %% Mock: look up task function and execute it
     TaskFun = lookup_task_function(_TaskName, ExecState),
     Ctx = ExecState#exec_state.ctx,
+    CaseId = ExecState#exec_state.case_id,
+    StepSeq = ExecState#exec_state.step_count,
+    ScopeId = get_current_scope(ExecState),
 
     case TaskFun(Ctx) of
         {ok, NewCtx} ->
@@ -268,14 +303,35 @@ execute_task_exec({_TaskExec, _TaskName}, ExecState) ->
             };
         {effect, EffectSpec, ContCtx} ->
             %% Task yielded effect
-            %% Store effect spec in exec_state for later retrieval
-            _ = EffectSpec,  %% Suppress unused warning
-            ExecState#exec_state{
-                ctx = ContCtx,
-                status = blocked_effect,
-                ip = ExecState#exec_state.ip,  %% Don't advance IP
-                step_count = ExecState#exec_state.step_count + 1
-            };
+            {ok, EffectOrReceipt} = wf_effect:yield(CaseId, StepSeq, ScopeId, EffectSpec),
+
+            case EffectOrReceipt of
+                #receipt{result = Result} ->
+                    %% Cached result from idempotency, resume immediately
+                    NewCtx2 = maps:put(effect_result, Result, ContCtx),
+                    ExecState#exec_state{
+                        ctx = NewCtx2,
+                        ip = ExecState#exec_state.ip + 1,
+                        step_count = ExecState#exec_state.step_count + 1
+                    };
+                #effect{effect_id = EffectId} ->
+                    %% New effect, block executor
+                    CurrentToken = ExecState#exec_state.current_token,
+                    Token = maps:get(CurrentToken, ExecState#exec_state.tokens),
+                    UpdatedToken = Token#token{
+                        status = blocked_effect,
+                        current_effect = EffectId
+                    },
+                    Tokens = maps:put(CurrentToken, UpdatedToken, ExecState#exec_state.tokens),
+
+                    ExecState#exec_state{
+                        ctx = ContCtx,
+                        tokens = Tokens,
+                        status = blocked_effect,
+                        ip = ExecState#exec_state.ip + 1,
+                        step_count = ExecState#exec_state.step_count + 1
+                    }
+            end;
         {error, Reason} ->
             %% Task failed
             CurrentToken = ExecState#exec_state.current_token,
@@ -657,24 +713,19 @@ execute_cancel_scope({_CancelScope, {exit, ScopeId}}, ExecState) ->
             }
     end.
 
-%% @doc Check if scope is cancelled (stub for wf_cancel)
+%% @doc Check if scope is cancelled
 -spec is_scope_cancelled(term(), exec_state()) -> boolean().
 is_scope_cancelled(_ScopeId, _ExecState) ->
-    %% Stub: always false for now
-    %% TODO: Call wf_cancel:is_cancelled/2 when item 008 is implemented
+    %% TODO: Call wf_cancel:is_cancelled/2 when wf_exec has wf_state field
+    %% Current limitation: exec_state has inline state, not wf_state:state()
+    %% For now, keep stub behavior (always false)
     false.
 
-%% @doc Propagate cancellation to all tokens in scope (stub for wf_cancel)
+%% @doc Propagate cancellation to all tokens in scope
 -spec propagate_cancellation(term(), #{term() => #token{}}) -> #{term() => #token{}}.
 propagate_cancellation(ScopeId, TokensMap) ->
-    %% Stub: mark all tokens in scope as cancelled
-    %% TODO: Call wf_cancel:propagate/2 when item 008 is implemented
-    maps:map(fun(_TokenId, Token) ->
-        case Token#token.scope_id of
-            ScopeId -> Token#token{status = cancelled};
-            _ -> Token
-        end
-    end, TokensMap).
+    %% Delegate to wf_cancel for token cancellation
+    wf_cancel:propagate(ScopeId, TokensMap).
 
 %%====================================================================
 %% Single-Token Opcodes (continued)

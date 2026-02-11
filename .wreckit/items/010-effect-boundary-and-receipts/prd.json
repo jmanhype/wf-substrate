@@ -19,7 +19,7 @@
         "Module documentation is complete"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 1 - Foundation for all subsequent work. Effect ID format: composite key {CaseId, StepSeq, ScopeId} for traceability."
     },
     {
@@ -40,7 +40,7 @@
         "hash_effect_spec/1 function hashes effect_spec using SHA-256"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 2 - Receipt storage is append-only audit trail. Hash algorithm: SHA-256 via crypto:hash/2."
     },
     {
@@ -59,7 +59,7 @@
         "Mock effect handlers implemented (mock_effect, mock_delay, mock_error, mock_crash)"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 3 - Core yield/resume pattern. Effects execute asynchronously to avoid blocking executor."
     },
     {
@@ -84,7 +84,7 @@
         "Token current_effect field cleared on effect completion"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 5 - Executor integration. Polling model for effect completion (async notification deferred to v2)."
     },
     {
@@ -102,7 +102,7 @@
         "Cancelled effects discard results (ignored if effect completes after cancellation)"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 6 - Cancellation integration with wf_cancel (item 008) is future work."
     },
     {
@@ -119,7 +119,7 @@
         "All tests pass: eunit:test(wf_effect, [verbose])"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 7 - Unit tests cover all wf_effect functions. Test fixtures start/stop gen_servers."
     },
     {
@@ -137,7 +137,7 @@
         "All tests pass: eunit:test(wf_receipt, [verbose])"
       ],
       "priority": 1,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 7 - Unit tests cover all wf_receipt functions. Test fixtures start/stop gen_servers."
     },
     {
@@ -155,7 +155,7 @@
         "All tests pass: eunit:test(wf_exec, [verbose])"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Phase 7 - Integration tests verify end-to-end effect flow in executor."
     },
     {
@@ -188,7 +188,7 @@
         "Examples of task functions yielding effects"
       ],
       "priority": 2,
-      "status": "pending",
+      "status": "done",
       "notes": "Documentation ensures maintainability and helps users understand effect system."
     }
   ]

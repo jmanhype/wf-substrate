@@ -2,12 +2,12 @@
   "schema_version": 1,
   "id": "010-effect-boundary-and-receipts",
   "title": "Implement effect boundary and receipt system",
-  "state": "researched",
+  "state": "implementing",
   "overview": "Implement wf_effect.erl: the effect system boundary for external IO/tool calls. Tasks do not perform side effects directly. Instead, when a task needs external interaction, the executor yields {effect, EffectSpec, Continuation} where EffectSpec describes what to do and Continuation is the resumption point.\n\nEffectSpec includes: effect_id (unique causal ID derived from case_id + step_seq + scope), effect_type (atom), payload (term), idempotency_key (optional, for at-most-once semantics), timeout (optional).\n\nEffects are:\n- Cancelable: if the cancel scope containing the effect is cancelled, the effect is marked cancelled and its result (if any) is discarded.\n- Idempotent or at-most-once: if an idempotency_key is provided, duplicate effect submissions with the same key return the cached result from the receipt store.\n\nImplement wf_receipt.erl: receipt records for completed effects. Each receipt contains: receipt_id, effect_id, effect_spec_hash (for verification), timestamp, result (ok/error tuple), duration_us. Receipts form an append-only log per case. Receipts can be queried by effect_id or idempotency_key.\n\nExport from wf_effect: new_spec/4, yield/3, cancel_effect/2, is_cancelled/1.\nExport from wf_receipt: new/3, store/2, lookup/2, lookup_by_key/2, all/1, verify/2 (check hash matches spec).",
   "branch": null,
   "pr_url": null,
   "pr_number": null,
   "last_error": null,
   "created_at": "2026-02-10T00:00:00.000Z",
-  "updated_at": "2026-02-10T00:00:00.000Z"
+  "updated_at": "2026-02-11T18:35:45.256Z"
 }

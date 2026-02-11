@@ -9,8 +9,9 @@
     ip :: non_neg_integer(),
     scope_id :: term(),
     value :: term(),
-    status :: active | complete | cancelled,
-    instance_id :: term() | undefined  %% MI instance ID (undefined for non-MI tokens)
+    status :: active | complete | cancelled | blocked_effect | blocked_approval,
+    instance_id :: term() | undefined,  %% MI instance ID (undefined for non-MI tokens)
+    current_effect :: {term(), non_neg_integer(), term()} | undefined  %% Current pending effect
 }).
 
 -record(branch_info, {
@@ -32,11 +33,12 @@
     ip :: non_neg_integer(),
     bytecode :: wf_vm:wf_bc(),
     ctx :: map(),
+    case_id :: term() | undefined,  %% Case ID for effect ID generation
     tokens :: #{term() => #token{}},
     branch_map :: #{term() => #branch_info{}},
     join_counters :: #{term() => #join_counter{}},
     scope_stack :: [term()],
     step_count :: non_neg_integer(),
-    status :: running | done | blocked | cancelled,
+    status :: running | done | blocked | blocked_effect | cancelled | failed,
     current_token :: term() | undefined
 }).
