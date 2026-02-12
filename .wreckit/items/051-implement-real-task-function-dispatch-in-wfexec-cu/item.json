@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "051-implement-real-task-function-dispatch-in-wfexec-cu",
+  "title": "Implement real task function dispatch in wf_exec. Currently lookup_task_function/2 is a hardcoded mock that ignores the task name and returns fun(Ctx) -> {ok, maps:put(task_result, ok, Ctx)} end. Fix this so the executor actually calls the task function from the wf_term metadata. The compiler must propagate task metadata (the function field from task_metadata map) into the bytecode or a side-table accessible by the executor. The executor must call the real function when it encounters a task_exec opcode. ACCEPTANCE TEST: Create an escript that compiles wf_term:seq(wf_term:task(a, #{function => fun(Ctx) -> {ok, Ctx#{a_ran => true}} end}), wf_term:task(b, #{function => fun(Ctx) -> {ok, Ctx#{b_ran => true}} end})), executes it, and asserts the final context contains both a_ran and b_ran keys set to true. The test must fail with the current mock and pass after the fix. Do NOT use mocks or stubs. Write a real eunit test in test/wf_acceptance_tests.erl that verifies this.",
+  "state": "critique",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T23:59:37.615Z",
+  "updated_at": "2026-02-12T00:09:25.850Z"
+}

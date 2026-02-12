@@ -2,22 +2,27 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("wf_exec.hrl").
 
+%% Mock task function (always succeeds with empty context update)
+mock_task_fun() ->
+    fun(_Ctx) -> {ok, #{}} end.
+
 %% Mock bytecode generators
 mock_bytecode_simple_task() ->
-    [{task_exec, mock_task}, {done}].
+    {[{task_exec, mock_task}, {done}], #{mock_task => #{function => mock_task_fun()}}}.
 
 mock_bytecode_seq() ->
-    [{seq_enter, 0}, {task_exec, task_a}, {seq_next, 3}, {task_exec, task_b}, {done}].
+    {[{seq_enter, 0}, {task_exec, task_a}, {seq_next, 3}, {task_exec, task_b}, {done}],
+     #{task_a => #{function => mock_task_fun()}, task_b => #{function => mock_task_fun()}}}.
 
 mock_bytecode_par() ->
-    [
+    {[
         {par_fork, [1, 3]},           %% Fork to IP 1 and 3
         {task_exec, task_a},           %% IP 1: task_a
         {done},                        %% IP 2: done (branch 1)
         {task_exec, task_b},           %% IP 3: task_b
         {done},                        %% IP 4: done (branch 2)
         {join_wait, all}              %% IP 5: wait for all branches
-    ].
+    ], #{task_a => #{function => mock_task_fun()}, task_b => #{function => mock_task_fun()}}}.
 
 %%====================================================================
 %% Phase 1 Tests: exec_state Creation
@@ -49,7 +54,7 @@ single_task_test_() ->
 
 %% Test DONE opcode
 done_test_() ->
-    Bytecode = [{done}],
+    Bytecode = {[{done}], #{}},
     ExecState0 = wf_exec:new(Bytecode),
     {ExecState1, _Trace} = wf_exec:step(ExecState0, undefined),
     [
@@ -85,7 +90,7 @@ quanta_yield_test_() ->
 
 %% Test run until done
 run_until_done_test_() ->
-    Bytecode = [{task_exec, task}, {done}],
+    Bytecode = {[{task_exec, task}, {done}], #{task => #{function => mock_task_fun()}}},
     ExecState0 = wf_exec:new(Bytecode),
     Result = wf_exec:run(ExecState0, 100, undefined),
     [
@@ -126,7 +131,8 @@ join_wait_test_() ->
 
 %% Test XOR_CHOOSE selects one branch
 xor_choose_test_() ->
-    Bytecode = [{xor_choose, [1, 3]}, {task_exec, task_a}, {done}, {task_exec, task_b}, {done}],
+    Bytecode = {[{xor_choose, [1, 3]}, {task_exec, task_a}, {done}, {task_exec, task_b}, {done}],
+                 #{task_a => #{function => mock_task_fun()}, task_b => #{function => mock_task_fun()}}},
     ExecState0 = wf_exec:new(Bytecode),
     {ExecState1, _Trace} = wf_exec:step(ExecState0, undefined),
     [
@@ -139,12 +145,12 @@ xor_choose_test_() ->
 
 %% Mock bytecode for count loop
 mock_bytecode_loop_count() ->
-    [
+    {[
         {loop_check, {count, 3}},      %% Loop 3 times
         {task_exec, task_a},            %% Body
         {loop_back, 0},                 %% Jump to LOOP_CHECK
         {done}                          %% Exit
-    ].
+    ], #{task_a => #{function => mock_task_fun()}}}.
 
 %% Test count loop executes N times
 loop_count_test_() ->
@@ -186,12 +192,12 @@ loop_back_jump_test_() ->
 
 %% Mock bytecode for cancel scope
 mock_bytecode_cancel() ->
-    [
+    {[
         {cancel_scope, {enter, scope1}},
         {task_exec, task_a},
         {cancel_scope, {exit, scope1}},
         {done}
-    ].
+    ], #{task_a => #{function => mock_task_fun()}}}.
 
 %% Test cancel scope enter and exit
 cancel_scope_test_() ->
@@ -211,14 +217,14 @@ cancel_scope_test_() ->
 
 %% Test nested cancel scopes
 nested_cancel_scope_test_() ->
-    Bytecode = [
+    Bytecode = {[
         {cancel_scope, {enter, scope1}},
         {cancel_scope, {enter, scope2}},
         {task_exec, task_a},
         {cancel_scope, {exit, scope2}},
         {cancel_scope, {exit, scope1}},
         {done}
-    ],
+    ], #{task_a => #{function => mock_task_fun()}}},
     ExecState0 = wf_exec:new(Bytecode),
     %% Execute enter scope1
     {ExecState1, _Trace1} = wf_exec:step(ExecState0, undefined),
@@ -244,35 +250,35 @@ nested_cancel_scope_test_() ->
 
 %% Mock MI bytecode
 mock_bytecode_mi_wait_all() ->
-    [
+    {[
         {mi_spawn, {{fixed, 2}, wait_all, 2}},
         {task_exec, task},
         {done},
         {join_wait, wait_all}
-    ].
+    ], #{task => #{function => mock_task_fun()}}}.
 
 mock_bytecode_mi_wait_n() ->
-    [
+    {[
         {mi_spawn, {{fixed, 3}, {wait_n, 2}, 2}},
         {task_exec, task},
         {done},
         {join_wait, {wait_n, 2}}
-    ].
+    ], #{task => #{function => mock_task_fun()}}}.
 
 mock_bytecode_mi_first_complete() ->
-    [
+    {[
         {mi_spawn, {{fixed, 3}, first_complete, 2}},
         {task_exec, task},
         {done},
         {join_wait, first_complete}
-    ].
+    ], #{task => #{function => mock_task_fun()}}}.
 
 mock_bytecode_mi_fire_and_forget() ->
-    [
+    {[
         {mi_spawn, {{fixed, 2}, none, 1}},
         {task_exec, task},
         {done}
-    ].
+    ], #{task => #{function => mock_task_fun()}}}.
 
 %% Test MI_SPAWN spawns instances
 mi_spawn_test_() ->
@@ -347,7 +353,7 @@ mi_execution_first_complete_test_() ->
 %%====================================================================
 
 mock_bytecode_effect() ->
-    [{task_exec, effect_task}, {done}].
+    {[{task_exec, effect_task}, {done}], #{effect_task => #{function => mock_task_fun()}}}.
 
 effect_yield_test_() ->
     Bytecode = mock_bytecode_effect(),
@@ -364,7 +370,8 @@ effect_yield_test_() ->
 %%====================================================================
 
 scheduler_integration_test_() ->
-    Bytecode = [{xor_choose, [1, 3]}, {task_exec, task_a}, {done}, {task_exec, task_b}, {done}],
+    Bytecode = {[{xor_choose, [1, 3]}, {task_exec, task_a}, {done}, {task_exec, task_b}, {done}],
+                 #{task_a => #{function => mock_task_fun()}, task_b => #{function => mock_task_fun()}}},
     ExecState0 = wf_exec:new(Bytecode),
     Result = wf_exec:run(ExecState0, 100, deterministic),
     [

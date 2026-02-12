@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "id": "051-implement-real-task-function-dispatch-in-wfexec-cu",
+  "branch_name": "wreckit/051-implement-real-task-function-dispatch-in-wfexec-cu",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Extend wf_vm type system for task metadata storage",
+      "acceptance_criteria": [
+        "Add task_metadata_map() type to wf_vm.erl that maps task names to wf_term:task_metadata()",
+        "Modify wf_bc() type from [opcode()] to {[opcode()], task_metadata_map()} tuple",
+        "wf_vm module compiles without errors or warnings",
+        "Dialyzer type checking passes with no errors"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Type definitions only - no functional changes. Establishes foundation for compiler and executor changes."
+    },
+    {
+      "id": "US-002",
+      "title": "Update wf_compile to collect and return task metadata",
+      "acceptance_criteria": [
+        "Modify compile/1 to return {ok, {[opcode()], task_metadata_map()}} instead of {ok, [opcode()]}",
+        "Add compile_term_with_metadata/1 function that dispatches to metadata-aware compile functions",
+        "Implement compile_task_with_metadata/1 that returns {[{task_exec, Name}], #{Name => Metadata}}",
+        "Implement compile_seq_with_metadata/1 that merges metadata from left and right branches",
+        "Implement compile_par_with_metadata/1 with metadata collection from all branches",
+        "Implement compile_xor_with_metadata/1 with metadata collection from all alternatives",
+        "Implement compile_join_with_metadata/1 with metadata collection from all branches",
+        "Implement compile_loop_with_metadata/1 that propagates body metadata",
+        "Implement compile_cancel_with_metadata/1 that propagates body metadata",
+        "Implement compile_mi_with_metadata/1 that propagates body metadata",
+        "Remove old compile_task/1, compile_seq/1, compile_par/1, compile_xor/1, compile_join/1, compile_loop/1, compile_cancel/1, compile_mi/1 functions",
+        "Existing wf_compile_tests pass after changes",
+        "Manual test: Compiling wf_term:task(a, #{function => fun(_Ctx) -> ok end}) returns {ok, {[{task_exec, a}], #{a => #{function := _Fun}}}}"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "All compile_* functions must return {bytecode(), metadata_map()} tuples. Metadata merging uses maps:merge/2 to combine maps from branches."
+    },
+    {
+      "id": "US-003",
+      "title": "Update wf_exec record and constructor for metadata support",
+      "acceptance_criteria": [
+        "Add task_metadata field to exec_state record in wf_exec.hrl",
+        "Modify new/1 to accept {Bytecode, Metadata} tuple and unpack into exec_state",
+        "Store task_metadata map in exec_state on construction",
+        "Update snapshot_exec_state/1 to include task_metadata in StateMap",
+        "Update restore_exec_state/2 to validate task_metadata presence and restore it",
+        "Module compiles without errors or warnings",
+        "Existing wf_exec_tests pass with updated bytecode format"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Bytecode field in exec_state stores [opcode()] only. Metadata is stored separately in task_metadata field for O(1) lookup."
+    },
+    {
+      "id": "US-004",
+      "title": "Replace wf_exec mock lookup_task_function with real implementation",
+      "acceptance_criteria": [
+        "Replace lookup_task_function/2 implementation to retrieve function from task_metadata map",
+        "Lookup maps:get(TaskName, ExecState#exec_state.task_metadata) to get metadata",
+        "Extract function key from metadata: maps:get(function, Metadata)",
+        "Throw {badarg, {missing_task_metadata, TaskName}} if task not found in metadata map",
+        "Throw {badarg, {invalid_task_metadata, TaskName, Reason}} if function key missing or not a fun",
+        "Function returns task_fun() closure that can be called",
+        "Module compiles without errors",
+        "Manual test: lookup_task_function(valid_task, ExecState) returns fun, lookup_task_function(invalid, ExecState) throws badarg"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Uses maps:find/2 instead of maps:get/2 for better error messages. Distinguishes between missing task metadata and missing function key."
+    },
+    {
+      "id": "US-005",
+      "title": "Create acceptance test for end-to-end task function dispatch",
+      "acceptance_criteria": [
+        "Create test/wf_acceptance_tests.erl file with EUnit test",
+        "Test compiles wf_term:seq with two tasks having distinct functions",
+        "Task A function sets a_ran => true in context",
+        "Task B function sets b_ran => true in context",
+        "Verify metadata map contains both tasks after compilation",
+        "Execute workflow with wf_exec:run/3",
+        "Assert final context contains both a_ran => true and b_ran => true",
+        "Test fails with current mock implementation",
+        "Test passes after completing US-001 through US-004"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Test validates complete pipeline: compilation with metadata preservation, executor lookup and dispatch, real function execution, and context propagation."
+    }
+  ]
+}

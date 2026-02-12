@@ -26,7 +26,7 @@ compile_task_test_() ->
     {"Compile single task",
      fun() ->
          Term = {task, my_task, mock_task_metadata()},
-         {ok, Bytecode} = wf_compile:compile(Term),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
          ?assertEqual([{task_exec, my_task}], Bytecode)
      end}.
 
@@ -36,12 +36,12 @@ compile_seq_test_() ->
          Term = {seq,
                  {task, task_a, mock_task_metadata()},
                  {task, task_b, mock_task_metadata()}},
-         {ok, Bytecode} = wf_compile:compile(Term),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
          ?assertMatch([{seq_enter, 0}, {task_exec, task_a},
                        {seq_next, _}, {task_exec, task_b}],
-                      lists:flatten(Bytecode)),
+                      Bytecode),
          %% Verify seq_next target is integer (resolved label)
-         {_, SEQ_NEXT_IP} = lists:nth(3, lists:flatten(Bytecode)),
+         {_, SEQ_NEXT_IP} = lists:nth(3, Bytecode),
          ?assert(is_integer(SEQ_NEXT_IP))
      end}.
 
@@ -56,8 +56,8 @@ compile_par_test_() ->
              {task, task_a, mock_task_metadata()},
              {task, task_b, mock_task_metadata()}
          ]},
-         {ok, Bytecode} = wf_compile:compile(Term),
-         FlatBytecode = lists:flatten(Bytecode),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
+         FlatBytecode = Bytecode,
          ?assertMatch([{par_fork, [_Label1, _Label2]}, _, _, _, _, {join_wait, all}],
                       FlatBytecode),
          %% Verify par_fork operand is list of integers (resolved labels)
@@ -73,8 +73,8 @@ compile_xor_test_() ->
              {task, task_a, mock_task_metadata()},
              {task, task_b, mock_task_metadata()}
          ]},
-         {ok, Bytecode} = wf_compile:compile(Term),
-         FlatBytecode = lists:flatten(Bytecode),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
+         FlatBytecode = Bytecode,
          ?assertMatch([{xor_choose, [_Label1, _Label2]}, _, _, _, _],
                       FlatBytecode),
          %% Verify xor_choose operand is list of integers
@@ -93,8 +93,8 @@ compile_loop_count_test_() ->
     {"Compile count loop",
      fun() ->
          Term = {loop, {count, 3}, {task, task_a, mock_task_metadata()}},
-         {ok, Bytecode} = wf_compile:compile(Term),
-         FlatBytecode = lists:flatten(Bytecode),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
+         FlatBytecode = Bytecode,
          ?assertMatch([{loop_check, {count, 3}}, {task_exec, task_a},
                        {loop_back, _}], FlatBytecode),
          %% Verify loop_back operand is integer (backward jump)
@@ -109,8 +109,8 @@ compile_join_first_n_test_() ->
              {task, task_a, mock_task_metadata()},
              {task, task_b, mock_task_metadata()}
          ]},
-         {ok, Bytecode} = wf_compile:compile(Term),
-         FlatBytecode = lists:flatten(Bytecode),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
+         FlatBytecode = Bytecode,
          ?assertMatch([_, _, _, _, _, {join_wait, {first_n, 1}}],
                       FlatBytecode)
      end}.
@@ -135,7 +135,7 @@ compile_cancel_test_() ->
     {"Compile cancel scope",
      fun() ->
          Term = {cancel, my_scope, {task, task_a, mock_task_metadata()}},
-         {ok, Bytecode} = wf_compile:compile(Term),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
          ?assertMatch([{cancel_scope, {enter, my_scope}}, {task_exec, task_a},
                        {cancel_scope, {exit, my_scope}}], Bytecode)
      end}.
@@ -144,7 +144,7 @@ compile_mi_test_() ->
     {"Compile multiple instances",
      fun() ->
          Term = {mi, {fixed, 3}, {task, task_a, mock_task_metadata()}},
-         {ok, Bytecode} = wf_compile:compile(Term),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
          ?assertMatch([{mi_spawn, {fixed, 3}}, {task_exec, task_a}, {done},
                        {join_wait, all}], Bytecode)
      end}.
@@ -171,7 +171,7 @@ compile_seq_par_test_() ->
                      {task, task_b, mock_task_metadata()}
                  ]},
                  {task, task_c, mock_task_metadata()}},
-         {ok, Bytecode} = wf_compile:compile(Term),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
          %% Should have: seq_enter, par_fork, 2 branches with done, join_wait, seq_next, task_c
          ?assertMatch([{seq_enter, 0}, {par_fork, [2, 4]}, _, _, _, _, {join_wait, all},
                        {seq_next, 8}, {task_exec, task_c}], Bytecode)
@@ -184,8 +184,8 @@ compile_par_seq_test_() ->
              {seq, {task, task_a, mock_task_metadata()}, {task, task_b, mock_task_metadata()}},
              {seq, {task, task_c, mock_task_metadata()}, {task, task_d, mock_task_metadata()}}
          ]},
-         {ok, Bytecode} = wf_compile:compile(Term),
-         FlatBytecode = lists:flatten(Bytecode),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
+         FlatBytecode = Bytecode,
          %% Should have: par_fork, 2 sequences, each with seq_enter/seq_next, done, done, join_wait
          ?assertEqual(2, length([1 || {done} <- FlatBytecode])),
          ?assert(lists:keymember(join_wait, 1, FlatBytecode))
@@ -199,8 +199,8 @@ compile_loop_par_test_() ->
                       {task, task_a, mock_task_metadata()},
                       {task, task_b, mock_task_metadata()}
                   ]}},
-         {ok, Bytecode} = wf_compile:compile(Term),
-         FlatBytecode = lists:flatten(Bytecode),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
+         FlatBytecode = Bytecode,
          %% Should have: loop_check, par_fork, 2 branches with done, join_wait, loop_back
          ?assertEqual(8, length(FlatBytecode)),
          ?assertMatch({loop_check, {count, 2}}, lists:nth(1, FlatBytecode)),
@@ -219,7 +219,7 @@ label_resolution_test_() ->
                       {seq, {task, task_c, mock_task_metadata()},
                              {task, task_d, mock_task_metadata()}}
                   ]}},
-         {ok, Bytecode} = wf_compile:compile(Term),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
          %% Verify no label markers remain
          ?assertNot(lists:any(fun({label, _}) -> true; (_) -> false end, Bytecode)),
          %% Verify all label operands are integers
@@ -259,7 +259,7 @@ compiler_integration_test_() ->
                         {task, task_d, mock_task_metadata()}
                     ]}}
                   }},
-         {ok, Bytecode} = wf_compile:compile(Term),
+         {ok, {Bytecode, _Metadata}} = wf_compile:compile(Term),
          %% Verify bytecode is flat list
          ?assert(is_list(Bytecode)),
          %% Verify no nested lists

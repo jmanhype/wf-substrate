@@ -132,8 +132,8 @@
 -spec compile(wf_term:wf_term()) -> {ok, wf_vm:wf_bc()} | {error, compile_error()}.
 compile(Term) ->
     try
-        %% Pass 1: Compile AST to bytecode with labels
-        UnresolvedBytecode = compile_term(Term),
+        %% Pass 1: Compile AST to bytecode with labels, collecting metadata
+        {UnresolvedBytecode, MetadataMap} = compile_term_with_metadata(Term),
 
         %% Pass 2: Resolve labels to integer IPs
         ResolvedBytecode = resolve_labels(UnresolvedBytecode),
@@ -141,7 +141,7 @@ compile(Term) ->
         %% Pass 3: Validate no unresolved labels remain
         case validate_bytecode(ResolvedBytecode) of
             ok ->
-                {ok, ResolvedBytecode};
+                {ok, {ResolvedBytecode, MetadataMap}};
             {error, Reason} ->
                 {error, Reason}
         end
@@ -157,6 +157,43 @@ compile(Term) ->
 %%%===================================================================
 
 %%%-------------------------------------------------------------------
+%%% @doc Compile wf_term() to unresolved bytecode with metadata map
+%%%
+%%% Returns {bytecode(), metadata_map()} where metadata maps task names
+%%% to their task_metadata() maps containing functions and other config.
+%%% @end
+-spec compile_term_with_metadata(wf_term:wf_term()) -> {unresolved_bytecode(), wf_vm:task_metadata_map()}.
+compile_term_with_metadata({task, _Name, _Metadata} = Term) ->
+    compile_task_with_metadata(Term);
+
+compile_term_with_metadata({seq, _Left, _Right} = Term) ->
+    compile_seq_with_metadata(Term);
+
+compile_term_with_metadata({par, _Branches} = Term) ->
+    compile_par_with_metadata(Term);
+
+compile_term_with_metadata({x_or, _Alternatives} = Term) ->
+    compile_xor_with_metadata(Term);
+
+compile_term_with_metadata({join, _Policy, _Branches} = Term) ->
+    compile_join_with_metadata(Term);
+
+compile_term_with_metadata({loop, _Policy, _Body} = Term) ->
+    compile_loop_with_metadata(Term);
+
+compile_term_with_metadata({defer, _Alternatives} = Term) ->
+    compile_defer_with_metadata(Term);
+
+compile_term_with_metadata({cancel, _ScopeId, _Body} = Term) ->
+    compile_cancel_with_metadata(Term);
+
+compile_term_with_metadata({mi, _Policy, _Body} = Term) ->
+    compile_mi_with_metadata(Term);
+
+compile_term_with_metadata(InvalidTerm) ->
+    error({badarg, {invalid_term, InvalidTerm}}).
+
+%%%-------------------------------------------------------------------
 %%% @doc Compile wf_term() to unresolved bytecode (with labels)
 %%%
 %%% This is the main recursive compilation function that dispatches
@@ -164,148 +201,164 @@ compile(Term) ->
 %%% Each compile_* function returns a list of unresolved opcodes.
 %%% @end
 -spec compile_term(wf_term:wf_term()) -> unresolved_bytecode().
-compile_term({task, _Name, _Metadata} = Term) ->
-    compile_task(Term);
+-compile({nowarn_unused_function, compile_term/1}).
+compile_term(Term) ->
+    {Bytecode, _Metadata} = compile_term_with_metadata(Term),
+    Bytecode.
 
-compile_term({seq, _Left, _Right} = Term) ->
-    compile_seq(Term);
+%%%-------------------------------------------------------------------
+%%% Metadata-preserving compilation functions
+%%% These return {bytecode(), metadata_map()} tuples
+%%%-------------------------------------------------------------------
 
-compile_term({par, _Branches} = Term) ->
-    compile_par(Term);
+%% Compile task with metadata collection
+compile_task_with_metadata({task, Name, Metadata}) when is_atom(Name) ->
+    %% Emit task_exec opcode and store metadata
+    {[{task_exec, Name}], #{Name => Metadata}}.
 
-compile_term({x_or, _Alternatives} = Term) ->
-    compile_xor(Term);
+%% Compile sequence with metadata merging
+compile_seq_with_metadata({seq, Left, Right}) ->
+    %% Recursively compile branches, collecting metadata
+    {LeftCode, LeftMeta} = compile_term_with_metadata(Left),
+    {RightCode, RightMeta} = compile_term_with_metadata(Right),
 
-compile_term({join, _Policy, _Branches} = Term) ->
-    compile_join(Term);
-
-compile_term({loop, _Policy, _Body} = Term) ->
-    compile_loop(Term);
-
-compile_term({defer, _Alternatives} = Term) ->
-    compile_defer(Term);
-
-compile_term({cancel, _ScopeId, _Body} = Term) ->
-    compile_cancel(Term);
-
-compile_term({mi, _Policy, _Body} = Term) ->
-    compile_mi(Term);
-
-compile_term(InvalidTerm) ->
-    error({badarg, {invalid_term, InvalidTerm}}).
-
-%% Stub implementations (will be filled in later phases)
-
-compile_task({task, Name, _Metadata}) when is_atom(Name) ->
-    %% Phase 3: Emit task_exec opcode
-    [{task_exec, Name}].
-
-compile_seq({seq, Left, Right}) ->
-    %% SEQ: Execute Left, then Right
-    %% From SEMANTICS.md:307-375 and ARCHITECTURE.md:405-415
-    %%
-    %% Bytecode structure:
-    %%   seq_enter: Push sequence scope
-    %%   [Left bytecode]: Execute left branch
-    %%   seq_next Label: When left completes, jump to right
-    %%   Label: Target for seq_next
-    %%   [Right bytecode]: Execute right branch
-    %%
-    %% Label allows seq_next to jump over left code to right code
-    LeftCode = compile_term(Left),
+    %% Build sequence bytecode with label
     RightLabel = make_label(),
-    RightCode = compile_term(Right),
-    [{seq_enter, 0}] ++
-    LeftCode ++
-    [{seq_next, RightLabel}] ++
-    [RightLabel] ++
-    RightCode.
+    SeqCode = [{seq_enter, 0}] ++
+        LeftCode ++
+        [{seq_next, RightLabel}] ++
+        [RightLabel] ++
+        RightCode,
 
-compile_par({par, Branches}) when length(Branches) >= 2 ->
-    %% PAR: Fork N parallel branches, wait for all at join_wait
-    %% From SEMANTICS.md:376-448 and research.md:336-363
-    %%
-    %% Bytecode structure:
-    %%   par_fork [Label1, ..., LabelN]: Spawn N tokens
-    %%   Label1: Branch 1 start
-    %%   [Branch1 bytecode]: Execute branch 1
-    %%   done: Branch 1 complete (join counter++)
-    %%   ...
-    %%   LabelN: Branch N start
-    %%   [BranchN bytecode]: Execute branch N
-    %%   done: Branch N complete (join counter++)
-    %%   JoinLabel: Convergence point
-    %%   join_wait all: Block until all branches complete
-    %%
-    %% Each branch MUST end with done to signal completion
-    %% join_wait blocks until join counter reaches N
-    BranchCodes = [compile_term(B) || B <- Branches],
+    %% Merge metadata from both branches
+    {SeqCode, maps:merge(LeftMeta, RightMeta)}.
+
+%% Compile parallel with metadata collection from all branches
+compile_par_with_metadata({par, Branches}) when length(Branches) >= 2 ->
+    %% Compile all branches, collecting metadata
+    BranchResults = [compile_term_with_metadata(B) || B <- Branches],
+    BranchCodes = [Code || {Code, _Meta} <- BranchResults],
+    BranchMetadatas = [Meta || {_Code, Meta} <- BranchResults],
+
+    %% Generate labels
     BranchLabels = [make_label() || _ <- Branches],
     JoinLabel = make_label(),
+
+    %% Build branch bytecode with label markers and done opcodes
     BranchBytecode = lists:flatmap(fun({Code, Label}) ->
         [Label | Code] ++ [{done}]
     end, lists:zip(BranchCodes, BranchLabels)),
-    [{par_fork, BranchLabels}] ++
-    BranchBytecode ++
-    [JoinLabel] ++
-    [{join_wait, all}].
 
-compile_xor({x_or, Alternatives}) when length(Alternatives) >= 2 ->
-    %% XOR: Exclusive choice, select ONE branch at runtime
-    %% From SEMANTICS.md:449-480 and research.md:365-388
-    %%
-    %% Bytecode structure:
-    %%   xor_choose [Label1, ..., LabelN]: Scheduler picks ONE
-    %%   Label1: Alt 1 start
-    %%   [Alt1 bytecode]: Execute alt 1 (only if selected)
-    %%   done: Alt 1 complete
-    %%   ...
-    %%   LabelN: Alt N start
-    %%   [AltN bytecode]: Execute alt N (only if selected)
-    %%   done: Alt N complete
-    %%   NO JOIN WAIT: Only one branch runs, no synchronization
-    %%
-    %% Unselected branches are NEVER spawned (not cancelled)
-    %% No join needed (only one token exists)
-    AltCodes = [compile_term(A) || A <- Alternatives],
+    %% Build full bytecode
+    ParCode = [{par_fork, BranchLabels}] ++
+        BranchBytecode ++
+        [JoinLabel] ++
+        [{join_wait, all}],
+
+    %% Merge all branch metadata
+    MergedMetadata = lists:foldl(fun maps:merge/2, #{}, BranchMetadatas),
+    {ParCode, MergedMetadata}.
+
+%% Compile exclusive choice with metadata collection from all alternatives
+compile_xor_with_metadata({x_or, Alternatives}) when length(Alternatives) >= 2 ->
+    %% Compile all alternatives, collecting metadata
+    AltResults = [compile_term_with_metadata(A) || A <- Alternatives],
+    AltCodes = [Code || {Code, _Meta} <- AltResults],
+    AltMetadatas = [Meta || {_Code, Meta} <- AltResults],
+
+    %% Generate labels
     AltLabels = [make_label() || _ <- Alternatives],
+
+    %% Build alternative bytecode with label markers and done opcodes
     AltBytecode = lists:flatmap(fun({Code, Label}) ->
         [Label | Code] ++ [{done}]
     end, lists:zip(AltCodes, AltLabels)),
-    [{xor_choose, AltLabels}] ++
-    AltBytecode.
 
-compile_join({join, Policy, Branches}) when length(Branches) >= 2 ->
-    %% JOIN: Explicit join with policy
-    %% From SEMANTICS.md:481-591 and research.md:390-419
-    %%
-    %% Bytecode structure (same as par, but with explicit policy):
-    %%   par_fork [Label1, ..., LabelN]: Spawn N tokens
-    %%   Label1: Branch 1 start
-    %%   [Branch1 bytecode]: Execute branch 1
-    %%   done: Branch 1 complete
-    %%   ...
-    %%   LabelN: Branch N start
-    %%   [BranchN bytecode]: Execute branch N
-    %%   done: Branch N complete
-    %%   JoinLabel: Convergence point
-    %%   join_wait Policy: Block until policy satisfied
-    %%
-    %% Difference from par: par is implicit join(all, ...),
-    %% join has explicit policy (all/first_n/n_of_m/sync_merge/first_complete)
-    %%
-    %% Policy validation: Compiler validates policy format
+    %% Build full bytecode (no join for xor)
+    XorCode = [{xor_choose, AltLabels}] ++ AltBytecode,
+
+    %% Merge all alternative metadata
+    MergedMetadata = lists:foldl(fun maps:merge/2, #{}, AltMetadatas),
+    {XorCode, MergedMetadata}.
+
+%% Compile join with metadata collection from all branches
+compile_join_with_metadata({join, Policy, Branches}) when length(Branches) >= 2 ->
+    %% Validate policy
     validate_join_policy(Policy),
-    BranchCodes = [compile_term(B) || B <- Branches],
+
+    %% Compile all branches, collecting metadata
+    BranchResults = [compile_term_with_metadata(B) || B <- Branches],
+    BranchCodes = [Code || {Code, _Meta} <- BranchResults],
+    BranchMetadatas = [Meta || {_Code, Meta} <- BranchResults],
+
+    %% Generate labels
     BranchLabels = [make_label() || _ <- Branches],
     JoinLabel = make_label(),
+
+    %% Build branch bytecode
     BranchBytecode = lists:flatmap(fun({Code, Label}) ->
         [Label | Code] ++ [{done}]
     end, lists:zip(BranchCodes, BranchLabels)),
-    [{par_fork, BranchLabels}] ++
-    BranchBytecode ++
-    [JoinLabel] ++
-    [{join_wait, Policy}].
+
+    %% Build full bytecode
+    JoinCode = [{par_fork, BranchLabels}] ++
+        BranchBytecode ++
+        [JoinLabel] ++
+        [{join_wait, Policy}],
+
+    %% Merge all branch metadata
+    MergedMetadata = lists:foldl(fun maps:merge/2, #{}, BranchMetadatas),
+    {JoinCode, MergedMetadata}.
+
+%% Compile loop with metadata propagation
+compile_loop_with_metadata({loop, Policy, Body}) ->
+    %% Compile body, collecting metadata
+    {BodyCode, BodyMeta} = compile_term_with_metadata(Body),
+
+    %% Generate labels
+    LoopHeadLabel = make_label(),
+    ExitLabel = make_label(),
+
+    %% Build loop bytecode
+    LoopCode = [LoopHeadLabel] ++
+        [{loop_check, Policy}] ++
+        BodyCode ++
+        [{loop_back, LoopHeadLabel}] ++
+        [ExitLabel],
+
+    {LoopCode, BodyMeta}.
+
+%% Compile defer (not implemented)
+compile_defer_with_metadata({defer, _Alternatives}) ->
+    throw({error, {not_implemented, defer}}).
+
+%% Compile cancel with metadata propagation
+compile_cancel_with_metadata({cancel, ScopeId, Body}) ->
+    %% Compile body, collecting metadata
+    {BodyCode, BodyMeta} = compile_term_with_metadata(Body),
+
+    %% Build cancel bytecode (no metadata to merge)
+    CancelCode = [{cancel_scope, {enter, ScopeId}}] ++
+        BodyCode ++
+        [{cancel_scope, {exit, ScopeId}}],
+
+    {CancelCode, BodyMeta}.
+
+%% Compile multiple instances with metadata propagation
+compile_mi_with_metadata({mi, Policy, Body}) ->
+    %% Validate policy
+    validate_mi_policy(Policy),
+
+    %% Compile body, collecting metadata
+    {BodyCode, BodyMeta} = compile_term_with_metadata(Body),
+
+    %% Build MI bytecode
+    MiCode = [{mi_spawn, Policy}] ++
+        BodyCode ++
+        [{done}] ++
+        [{join_wait, all}],
+
+    {MiCode, BodyMeta}.
 
 %% @private Validate join policy format
 %% Throws badarg if policy is invalid
@@ -317,84 +370,6 @@ validate_join_policy({first_n, N}) when is_integer(N), N > 0 -> ok;
 validate_join_policy({n_of_m, N, M}) when is_integer(N), is_integer(M), N > 0, M > 0, N =< M -> ok;
 validate_join_policy(InvalidPolicy) ->
     error({badarg, {invalid_join_policy, InvalidPolicy}}).
-
-compile_loop({loop, Policy, Body}) ->
-    %% LOOP: Repeated execution until condition satisfied
-    %% From SEMANTICS.md:592-695 and research.md:421-479
-    %%
-    %% Bytecode structure (same for all policies):
-    %%   LoopHeadLabel: Loop entry point
-    %%   loop_check Policy: Check condition (exit or continue)
-    %%   [Body bytecode]: Execute loop body
-    %%   loop_back LoopHeadLabel: Jump back to entry
-    %%   ExitLabel: Loop exit point (after loop_back)
-    %%
-    %% Policy determines when loop_check exits:
-    %%   - {count, N}: Decrement, exit if 0, continue if > 0
-    %%   - while: Check condition FIRST, exit if false
-    %%   - until: Execute body, check condition AFTER, exit if true
-    %%
-    %% Compiler emits same structure for all policies.
-    %% Runtime semantics differ based on policy operand.
-    BodyCode = compile_term(Body),
-    LoopHeadLabel = make_label(),
-    ExitLabel = make_label(),
-    [LoopHeadLabel] ++
-    [{loop_check, Policy}] ++
-    BodyCode ++
-    [{loop_back, LoopHeadLabel}] ++
-    [ExitLabel].
-
-compile_defer({defer, _Alternatives}) ->
-    %% Defer not implemented in v1 (not in spec)
-    throw({error, {not_implemented, defer}}).
-
-compile_cancel({cancel, ScopeId, Body}) ->
-    %% CANCEL: Region cancellation wrapper
-    %% From SEMANTICS.md:749-861 and research.md:481-502
-    %%
-    %% Bytecode structure:
-    %%   cancel_scope {enter, ScopeId}: Push scope onto stack
-    %%   [Body bytecode]: Execute body (all tokens inherit scope)
-    %%   cancel_scope {exit, ScopeId}: Pop scope from stack
-    %%
-    %% If cancel signal received during body execution,
-    %% all tokens in scope are marked cancelled.
-    %% Cancellation propagates to nested scopes recursively.
-    %%
-    %% No labels needed (linear execution).
-    %% Two-opcode format makes enter/exit explicit.
-    BodyCode = compile_term(Body),
-    [{cancel_scope, {enter, ScopeId}}] ++
-    BodyCode ++
-    [{cancel_scope, {exit, ScopeId}}].
-
-compile_mi({mi, Policy, Body}) ->
-    %% MI: Multiple instances (parallel instances with join)
-    %% From SEMANTICS.md:862-968 and research.md:504-531
-    %%
-    %% Bytecode structure:
-    %%   mi_spawn Policy: Spawn N instances
-    %%   [Body bytecode]: Template for each instance
-    %%   done: Each instance terminates here
-    %%   join_wait all: Collect all instance results
-    %%
-    %% Policy determines instance count:
-    %%   - {fixed, N}: Spawn exactly N instances
-    %%   - {dynamic, Min, Max}: Spawn Min..Max based on ctx()
-    %%
-    %% Each instance executes Body independently with its own token.
-    %% All instances converge at join_wait.
-    %%
-    %% Alternative design: mi_spawn spawns instances and includes
-    %% body bytecode as template. Executor replicates bytecode for
-    %% each instance. This is more efficient than emitting N copies.
-    validate_mi_policy(Policy),
-    BodyCode = compile_term(Body),
-    [{mi_spawn, Policy}] ++
-    BodyCode ++
-    [{done}] ++
-    [{join_wait, all}].
 
 %% @private Validate MI policy format
 %% Throws badarg if policy is invalid

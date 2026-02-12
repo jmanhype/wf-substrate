@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "052-implement-real-loop-condition-evaluation-in-wfexec",
+  "title": "Implement real loop condition evaluation in wf_exec. Currently the loop_check opcode handler always continues without evaluating the loop policy. For {count, N} loops, the executor must track iteration count per loop scope and exit when count is reached. The loop_back opcode should jump back to loop_check only if the condition still holds. ACCEPTANCE TEST in test/wf_acceptance_tests.erl: Compile wf_term:loop({count, 3}, wf_term:task(counter, #{function => fun(Ctx) -> N = maps:get(n, Ctx, 0), {ok, Ctx#{n => N + 1}} end})). Execute it. Assert final context has n => 3. The test must use real task dispatch (depends on item 051). Do NOT use mocks.",
+  "state": "idea",
+  "overview": "",
+  "branch": null,
+  "pr_url": null,
+  "pr_number": null,
+  "last_error": null,
+  "created_at": "2026-02-11T23:59:50.787Z",
+  "updated_at": "2026-02-11T23:59:50.787Z"
+}

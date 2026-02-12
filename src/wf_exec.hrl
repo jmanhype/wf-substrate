@@ -31,7 +31,7 @@
 
 -record(exec_state, {
     ip :: non_neg_integer(),
-    bytecode :: wf_vm:wf_bc(),
+    bytecode :: [wf_vm:opcode()],  %% Opcodes only (metadata stored separately)
     ctx :: map(),
     case_id :: term() | undefined,  %% Case ID for effect ID generation
     tokens :: #{term() => #token{}},
@@ -40,5 +40,6 @@
     scope_stack :: [term()],
     step_count :: non_neg_integer(),
     status :: running | done | blocked | blocked_effect | cancelled | failed,
-    current_token :: term() | undefined
+    current_token :: term() | undefined,
+    task_metadata :: wf_vm:task_metadata_map()  %% Task metadata for function lookup
 }).
