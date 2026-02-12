@@ -2,12 +2,12 @@
   "schema_version": 1,
   "id": "053-implement-real-parallel-forkjoin-synchronization-i",
   "title": "Implement real parallel fork/join synchronization in wf_exec. Currently par_fork creates branch entries but join_wait never resolves because the scheduler returns mock tokens and branch completion is not tracked. Fix the executor so that: (1) par_fork spawns tokens for each branch and executes them, (2) each branch token runs to its done opcode, (3) join_wait with policy all blocks until all branches have completed, (4) after join, execution continues at the next opcode. The scheduler must select real active tokens not mock_token. ACCEPTANCE TEST in test/wf_acceptance_tests.erl: Compile wf_term:par([wf_term:task(x, #{function => fun(Ctx) -> {ok, Ctx#{x_ran => true}} end}), wf_term:task(y, #{function => fun(Ctx) -> {ok, Ctx#{y_ran => true}} end})]). Execute it with wf_exec:run/3. Assert it returns {done, FinalState} (NOT {yield, _}). Assert final context contains x_ran and y_ran. Do NOT use mocks.",
-  "state": "idea",
+  "state": "critique",
   "overview": "",
   "branch": null,
   "pr_url": null,
   "pr_number": null,
   "last_error": null,
   "created_at": "2026-02-12T00:00:05.413Z",
-  "updated_at": "2026-02-12T00:00:05.413Z"
+  "updated_at": "2026-02-12T00:56:24.574Z"
 }

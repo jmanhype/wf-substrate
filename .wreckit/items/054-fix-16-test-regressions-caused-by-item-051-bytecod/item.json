@@ -2,12 +2,14 @@
   "schema_version": 1,
   "id": "054-fix-16-test-regressions-caused-by-item-051-bytecod",
   "title": "Fix 16 test regressions caused by item 051 bytecode format change. wf_exec:new/1 now expects {Bytecode, MetadataMap} tuple but many callers still pass plain [opcode()] lists. The fix: make wf_exec:new/1 accept both formats — if passed a plain list, wrap it as {List, #{}} with empty metadata. This ensures backward compatibility. All 16 failures are function_clause errors in wf_exec:new/1 called from wf_case_runner and other test modules. After fixing, rebar3 eunit must show 0 failures. Also implement real loop condition evaluation: currently the loop_check opcode handler always continues without evaluating the loop policy. For {count, N} loops, track iteration count per loop scope and exit when count is reached. ACCEPTANCE TEST: Add to test/wf_acceptance_tests.erl a loop_count_test that compiles wf_term:loop({count, 3}, wf_term:task(counter, #{function => fun(Ctx) -> N = maps:get(n, Ctx, 0), {ok, Ctx#{n => N + 1}} end})). Execute it. Assert the result is {done, _} not {yield, _}. Assert final context has n => 3.",
-  "state": "critique",
+  "state": "done",
   "overview": "",
-  "branch": null,
+  "branch": "wreckit/054-fix-16-test-regressions-caused-by-item-051-bytecod",
   "pr_url": null,
   "pr_number": null,
   "last_error": null,
   "created_at": "2026-02-12T00:10:54.767Z",
-  "updated_at": "2026-02-12T00:18:49.490Z"
+  "updated_at": "2026-02-12T00:18:52.158Z",
+  "rollback_sha": "585fd7284cdddc0a617589c194976bd317006e59",
+  "completed_at": "2026-02-12T00:18:52.158Z"
 }

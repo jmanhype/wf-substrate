@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "id": "053-implement-real-parallel-forkjoin-synchronization-i",
+  "branch_name": "wreckit/053-implement-real-parallel-forkjoin-synchronization-i",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Implement token extraction in wf_sched:select_action/2",
+      "acceptance_criteria": [
+        "wf_sched:select_action/2 extracts active tokens from exec_state.tokens",
+        "Extracted tokens are filtered by status =:= active",
+        "Returns list of {token, token_id()} actions for all active tokens",
+        "Deterministic policy selects first token by sorted token_id",
+        "Returns {token, undefined} when no active tokens exist",
+        "Code compiles with no warnings",
+        "Dialyzer passes with no type errors"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Add extract_enabled_actions/1 helper function. Modify select_action/2 to call helper and return real token_ids instead of mock_token. Maintain backward compatibility by returning {token, undefined} when tokens map is empty."
+    },
+    {
+      "id": "US-002",
+      "title": "Integrate scheduler decision in wf_exec:step_normal/2",
+      "acceptance_criteria": [
+        "step_normal/2 pattern matches on {token, SelectedTokenId} from scheduler",
+        "Updates current_token field from SelectedTokenId before executing",
+        "Passes updated ExecState with correct current_token to IP sync",
+        "Uses selected token for opcode fetch and execution",
+        "Handles {token, undefined} case correctly (no active tokens)",
+        "All existing wf_test_par tests pass unchanged",
+        "All existing wf_test_seq tests pass unchanged"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Modify step_normal/2 to use SchedDecision instead of reading current_token from exec_state. Update current_token field immediately, then use updated exec_state for all subsequent operations."
+    },
+    {
+      "id": "US-003",
+      "title": "Add acceptance test for parallel fork/join execution",
+      "acceptance_criteria": [
+        "Test compiles par([task(x), task(y)]) term using wf_compile:compile/1",
+        "Test executes workflow with wf_exec:run/3 using deterministic policy",
+        "Test asserts result is {done, _} not {yield, _}",
+        "Test verifies final context contains x_ran => true",
+        "Test verifies final context contains y_ran => true",
+        "Test verifies both task functions executed (context size = 2)",
+        "Test passes with real task functions (no mocks)",
+        "Test follows existing acceptance test pattern in wf_acceptance_tests.erl"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Add parallel_fork_join_test_() to test/wf_acceptance_tests.erl. Use wf_term:par/1 with two task() terms. Each task function sets a unique key (x_ran, y_ran) in context. Verify both keys exist in final context after execution completes."
+    },
+    {
+      "id": "US-004",
+      "title": "Verify all existing tests still pass",
+      "acceptance_criteria": [
+        "wf_test_par.erl: par_2_branches_all_complete_test/0 passes",
+        "wf_test_par.erl: par_3_branches_all_complete_test/0 passes",
+        "wf_test_par.erl: par_mixed_completion_test/0 passes",
+        "wf_test_par.erl: par_wait_n_2_of_3_test/0 passes",
+        "wf_test_join.erl: join_wait_all_3_test/0 passes",
+        "wf_test_seq.erl: all sequential tests pass",
+        "wf_acceptance_tests.erl: all existing tests pass",
+        "rebar3 eunit completes with no failures"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Run full test suite after implementing US-001 and US-002. Ensure no regressions in existing functionality. Pay special attention to tests that use 'undefined' policy - they should continue working with backward compatibility."
+    },
+    {
+      "id": "US-005",
+      "title": "Document scheduler token selection behavior",
+      "acceptance_criteria": [
+        "Update wf_sched.erl module doc to explain token selection",
+        "Document deterministic policy ordering (by token_id)",
+        "Document return value {token, TokenId} or {token, undefined}",
+        "Add example in module doc showing parallel execution",
+        "Update wf_exec.erl step_normal/2 comment to mention scheduler integration",
+        "Code compiles with no documentation warnings"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Add clear documentation explaining how scheduler selects tokens in multi-token scenarios. Explain deterministic ordering for reproducible execution. Provide example of parallel workflow execution."
+    }
+  ]
+}

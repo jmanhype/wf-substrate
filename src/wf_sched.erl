@@ -1,4 +1,5 @@
 -module(wf_sched).
+-include("wf_exec.hrl").
 
 %%====================================================================
 %% Behaviour Definition
@@ -103,13 +104,31 @@ from_log(ChoiceLog) when is_list(ChoiceLog) ->
 
 %% @doc Legacy API for backward compatibility
 %% Accepts both sched_policy() atom and sched_state() map
+%%
+%% For deterministic policy: selects token with lowest token_id (sorted order)
+%% Returns {token, TokenId} or {token, undefined} if no active tokens
 -spec select_action(exec_state(), sched_policy() | sched_state()) -> sched_decision().
-select_action(_ExecState, PolicyOrState) when is_atom(PolicyOrState) ->
-    case PolicyOrState of
-        deterministic -> {token, mock_token};
-        nondeterministic -> {token, mock_token};
-        {replay, _} -> {token, replay_token};
-        undefined -> {token, mock_token}
+select_action(ExecState, PolicyOrState) when is_atom(PolicyOrState) ->
+    %% Extract enabled actions from executor state
+    EnabledActions = extract_enabled_actions(ExecState),
+
+    case EnabledActions of
+        [] ->
+            %% No active tokens - backward compatibility with mock bytecode
+            {token, undefined};
+        [Single] ->
+            %% Only one active token, execute it
+            Single;
+        Multiple when PolicyOrState =:= deterministic; PolicyOrState =:= undefined ->
+            %% Select first token by sorted token_id for stable ordering
+            hd(lists:sort(Multiple));
+        Multiple when PolicyOrState =:= nondeterministic ->
+            %% TODO: Implement random selection in future PR
+            %% For now, use deterministic ordering
+            hd(lists:sort(Multiple));
+        _Other ->
+            %% Fallback for replay and other policies
+            {token, undefined}
     end;
 select_action(ExecState, SchedState) when is_map(SchedState) ->
     %% Extract policy from sched state map
@@ -119,6 +138,14 @@ select_action(ExecState, SchedState) when is_map(SchedState) ->
 %%====================================================================
 %% Internal Functions
 %%====================================================================
+
+%% @doc Extract enabled actions from executor state
+%% Returns list of {token, token_id()} for all active tokens
+-spec extract_enabled_actions(exec_state()) -> [sched_decision()].
+extract_enabled_actions(ExecState) ->
+    TokensMap = ExecState#exec_state.tokens,
+    ActiveTokens = [T || T <- maps:values(TokensMap), T#token.status =:= active],
+    [{token, T#token.token_id} || T <- ActiveTokens].
 
 -spec extract_policy_module(sched_state()) -> module().
 extract_policy_module(#{policy := deterministic}) ->
