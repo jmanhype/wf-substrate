@@ -335,6 +335,21 @@ step_check_join(ExecState, _SchedDecision) ->
     end.
 
 %% @private Normal step (not blocked)
+step_normal(ExecState, SchedDecision) when not is_tuple(SchedDecision) ->
+    %% Legacy callers pass undefined or atom — resolve to active token
+    ResolvedDecision = case SchedDecision of
+        undefined ->
+            %% Find an active token to execute (backward compat for step/2 callers)
+            ActiveTokens = [T || T <- maps:values(ExecState#exec_state.tokens),
+                            T#token.status =:= active],
+            case ActiveTokens of
+                [T | _] -> {token, T#token.token_id};
+                [] -> {token, undefined}
+            end;
+        Other ->
+            {token, Other}
+    end,
+    step_normal(ExecState, ResolvedDecision);
 step_normal(ExecState, {token, SelectedTokenId}) ->
     case SelectedTokenId of
         undefined ->
@@ -361,7 +376,24 @@ step_normal(ExecState, {token, SelectedTokenId}) ->
                 false -> ExecState1
             end,
             Opcode = fetch_opcode(SyncedExecState),
-            NewExecState = execute_opcode(Opcode, SyncedExecState, {token, SelectedTokenId}),
+            NewExecState0 = execute_opcode(Opcode, SyncedExecState, {token, SelectedTokenId}),
+            %% Write back updated IP to current token (multi-token mode)
+            %% Opcodes advance ExecState.ip but don't update the token's ip field.
+            %% Without this, sync_ip_with_current_token reads stale token IP next step.
+            NewExecState = case maps:size(NewExecState0#exec_state.tokens) > 1 of
+                true ->
+                    CurTok = NewExecState0#exec_state.current_token,
+                    case maps:find(CurTok, NewExecState0#exec_state.tokens) of
+                        {ok, Tok} ->
+                            UpdatedTok = Tok#token{ip = NewExecState0#exec_state.ip},
+                            NewToks = maps:put(CurTok, UpdatedTok, NewExecState0#exec_state.tokens),
+                            NewExecState0#exec_state{tokens = NewToks};
+                        error ->
+                            NewExecState0
+                    end;
+                false ->
+                    NewExecState0
+            end,
             TraceEvent = #{opcode => Opcode, step_count => NewExecState#exec_state.step_count},
             {NewExecState, TraceEvent}
     end.
@@ -731,20 +763,31 @@ execute_join_wait({_JoinWait, _Policy}, ExecState) ->
             JoinCounters = maps:remove(JoinId, ExecState#exec_state.join_counters),
             BranchMap = remove_branch_by_join(JoinId, ExecState#exec_state.branch_map),
 
-            %% Create continuation token with merged results
+            %% Merge branch contexts into global ctx
+            MergedCtx = lists:foldl(fun(BranchCtx, Acc) when is_map(BranchCtx) ->
+                maps:merge(Acc, BranchCtx);
+            (_, Acc) -> Acc
+            end, ExecState#exec_state.ctx, JoinCounter#join_counter.results),
+
+            %% Create continuation token
             ContinuationTokenId = make_ref(),
             ContinuationToken = #token{
                 token_id = ContinuationTokenId,
                 ip = ExecState#exec_state.ip + 1,
                 scope_id = get_current_scope(ExecState),
-                value = merge_results(JoinCounter#join_counter.results, all),
+                value = undefined,
                 status = active,
                 instance_id = undefined
             },
-            Tokens = maps:put(ContinuationTokenId, ContinuationToken, ExecState#exec_state.tokens),
+            %% Remove completed branch tokens, add continuation
+            CleanedTokens = maps:filter(fun(_TId, T) ->
+                T#token.status =:= active
+            end, ExecState#exec_state.tokens),
+            Tokens = maps:put(ContinuationTokenId, ContinuationToken, CleanedTokens),
 
             ExecState#exec_state{
                 ip = ExecState#exec_state.ip + 1,
+                ctx = MergedCtx,
                 tokens = Tokens,
                 join_counters = JoinCounters,
                 branch_map = BranchMap,
@@ -985,7 +1028,7 @@ execute_done(ExecState) ->
             {UpdatedTokens2, UpdatedJoinCounters} = case find_branch_for_token(CurrentToken, ExecState#exec_state.branch_map) of
                 {ok, BranchId} ->
                     %% Token is part of a parallel branch, increment join counter
-                    NewJoinCounters = increment_join_counter(BranchId, ExecState, UpdatedToken#token.value),
+                    NewJoinCounters = increment_join_counter(BranchId, ExecState, ExecState#exec_state.ctx),
                     {Tokens, NewJoinCounters};
                 error ->
                     %% Not part of a parallel branch
@@ -996,20 +1039,65 @@ execute_done(ExecState) ->
             ActiveTokens = [T || T <- maps:values(UpdatedTokens2), T#token.status =:= active],
             case ActiveTokens of
                 [] ->
-                    %% No active tokens, executor is done
-                    ExecState#exec_state{
-                        tokens = UpdatedTokens2,
-                        join_counters = UpdatedJoinCounters,
-                        status = done,
-                        step_count = ExecState#exec_state.step_count + 1
-                    };
+                    %% No active tokens — check for satisfied join counters
+                    case find_satisfied_join(UpdatedJoinCounters) of
+                        {ok, JoinId, JoinCounter} ->
+                            %% Join satisfied: merge branch contexts, create continuation past join_wait
+                            MergedCtx = lists:foldl(fun(BranchCtx, Acc) when is_map(BranchCtx) ->
+                                maps:merge(Acc, BranchCtx);
+                            (_, Acc) -> Acc
+                            end, ExecState#exec_state.ctx, JoinCounter#join_counter.results),
+
+                            %% Find the join_wait opcode IP by scanning bytecode
+                            JoinWaitIP = find_join_wait_ip(ExecState#exec_state.bytecode),
+                            ContinuationIP = JoinWaitIP + 1,
+
+                            %% Clean up join state
+                            CleanJoinCounters = maps:remove(JoinId, UpdatedJoinCounters),
+                            CleanBranchMap = remove_branch_by_join(JoinId, ExecState#exec_state.branch_map),
+
+                            %% Create continuation token past join_wait
+                            ContTokenId = make_ref(),
+                            ContToken = #token{
+                                token_id = ContTokenId,
+                                ip = ContinuationIP,
+                                scope_id = get_current_scope(ExecState),
+                                value = undefined,
+                                status = active,
+                                instance_id = undefined
+                            },
+                            CleanTokens = maps:filter(fun(_TId, T) ->
+                                T#token.status =:= active
+                            end, UpdatedTokens2),
+                            FinalTokens = maps:put(ContTokenId, ContToken, CleanTokens),
+
+                            ExecState#exec_state{
+                                ip = ContinuationIP,
+                                ctx = MergedCtx,
+                                tokens = FinalTokens,
+                                join_counters = CleanJoinCounters,
+                                branch_map = CleanBranchMap,
+                                current_token = ContTokenId,
+                                step_count = ExecState#exec_state.step_count + 1
+                            };
+                        none ->
+                            %% No joins pending, executor is truly done
+                            ExecState#exec_state{
+                                tokens = UpdatedTokens2,
+                                join_counters = UpdatedJoinCounters,
+                                status = done,
+                                step_count = ExecState#exec_state.step_count + 1
+                            }
+                    end;
                 _ ->
                     %% Other tokens still active, select next token
                     NextToken = select_next_token(UpdatedTokens2),
+                    NextTokenRec = maps:get(NextToken, UpdatedTokens2),
                     ExecState#exec_state{
                         tokens = UpdatedTokens2,
                         join_counters = UpdatedJoinCounters,
                         current_token = NextToken,
+                        ip = NextTokenRec#token.ip,
                         step_count = ExecState#exec_state.step_count + 1
                     }
             end;
@@ -1080,6 +1168,33 @@ increment_join_counter(BranchId, ExecState, ResultValue) ->
         results = [ResultValue | JoinCounter#join_counter.results]
     },
     maps:put(JoinId, UpdatedJoinCounter, ExecState#exec_state.join_counters).
+
+%% @doc Find first satisfied join counter (completed >= required)
+-spec find_satisfied_join(#{term() => #join_counter{}}) ->
+    {ok, term(), #join_counter{}} | none.
+find_satisfied_join(JoinCounters) ->
+    Results = maps:fold(fun(JoinId, JC, Acc) ->
+        case JC#join_counter.completed >= JC#join_counter.required of
+            true -> [{JoinId, JC} | Acc];
+            false -> Acc
+        end
+    end, [], JoinCounters),
+    case Results of
+        [{JoinId, JC} | _] -> {ok, JoinId, JC};
+        [] -> none
+    end.
+
+%% @doc Find the IP of the join_wait opcode in bytecode
+-spec find_join_wait_ip([wf_vm:opcode()]) -> non_neg_integer().
+find_join_wait_ip(Bytecode) ->
+    find_join_wait_ip(Bytecode, 0).
+
+find_join_wait_ip([], _IP) ->
+    error({no_join_wait_found});
+find_join_wait_ip([{JW, _} | _], IP) when JW =:= join_wait; JW =:= 'JOIN_WAIT' ->
+    IP;
+find_join_wait_ip([_ | Rest], IP) ->
+    find_join_wait_ip(Rest, IP + 1).
 
 %% @doc Look up task function from metadata map
 %% For backward compatibility with old test code that doesn't provide metadata,
