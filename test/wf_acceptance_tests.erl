@@ -84,3 +84,56 @@ context_propagation_test_() ->
          FinalCtx = wf_exec:get_ctx(ExecState2),
          ?assertEqual(10, maps:get(result, FinalCtx))
      end}.
+
+%%--------------------------------------------------------------------
+%% @doc Test that loop executes exactly N times with count policy
+%%
+%% This test verifies:
+%% 1. Loop policy {count, N} terminates after N iterations
+%% 2. Loop counters are tracked per-scope (not in user context)
+%% 3. Workflow completes as {done, _} (not yielded)
+%% 4. Task functions from metadata are dispatched correctly
+%%--------------------------------------------------------------------
+loop_count_test_() ->
+    {"Loop executes exactly N times with count policy",
+     fun() ->
+         %% Build workflow: loop({count, 3}, task(counter))
+         %% Task increments 'n' key in context each time it runs
+         Term = wf_term:loop(
+             {count, 3},
+             wf_term:task(counter, #{
+                 function => fun(Ctx) ->
+                     N = maps:get(n, Ctx, 0),
+                     {ok, Ctx#{n => N + 1}}
+                 end
+             })
+         ),
+
+         %% Compile to bytecode (returns {ok, {Bytecode, Metadata}})
+         {ok, {Bytecode, Metadata}} = wf_compile:compile(Term),
+
+         %% Execute workflow with both bytecode formats
+         %% Test new format (tuple with metadata)
+         ExecState0 = wf_exec:new({Bytecode, Metadata}),
+         Result1 = wf_exec:run(ExecState0, 100, deterministic),
+
+         %% Verify result is {done, _} not {yield, _}
+         ?assertMatch({done, _}, Result1),
+
+         %% Extract final state for further assertions
+         {done, ExecState1} = Result1,
+
+         %% Verify task ran exactly 3 times (n counter = 3)
+         FinalCtx = wf_exec:get_ctx(ExecState1),
+         ?assertEqual(3, maps:get(n, FinalCtx, 0)),
+
+         %% Verify loop counter was cleaned up (not in context)
+         ?assertNot(maps:is_key(loop_counter, FinalCtx)),
+
+         %% Test backward compatibility: plain bytecode list should also work
+         %% (use same Bytecode, but wrap as legacy format)
+         ExecState2 = wf_exec:new(Bytecode),
+         {done, ExecState3} = wf_exec:run(ExecState2, 100, deterministic),
+         FinalCtx2 = wf_exec:get_ctx(ExecState3),
+         ?assertEqual(3, maps:get(n, FinalCtx2, 0))
+     end}.

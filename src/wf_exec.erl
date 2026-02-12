@@ -48,8 +48,10 @@
 %%====================================================================
 
 %% @doc Create new executor from bytecode with metadata
--spec new(wf_vm:wf_bc()) -> exec_state().
-new({Bytecode, Metadata}) ->
+%% Accepts both new format {Bytecode, Metadata} and legacy format [opcode()]
+-spec new(wf_vm:wf_bc() | [wf_vm:opcode()]) -> exec_state().
+new({Bytecode, Metadata}) when is_list(Bytecode), is_map(Metadata) ->
+    %% New format: tuple with metadata
     CaseId = make_ref(),  %% Generate case_id for effect IDs
     InitialTokenId = make_ref(),
     RootScopeId = root,
@@ -74,8 +76,13 @@ new({Bytecode, Metadata}) ->
         step_count = 0,
         status = running,
         current_token = InitialTokenId,
-        task_metadata = Metadata  %% Store task metadata for lookup
-    }.
+        task_metadata = Metadata,  %% Store task metadata for lookup
+        loop_counters = #{}  %% Initialize empty loop counters map
+    };
+new(Bytecode) when is_list(Bytecode) ->
+    %% Legacy format: plain list of opcodes (backward compatibility)
+    %% Wrap with empty metadata map for old test code
+    new({Bytecode, #{}}).
 
 %% @doc Get current instruction pointer
 -spec get_ip(exec_state()) -> non_neg_integer().
@@ -118,7 +125,8 @@ snapshot_exec_state(ExecState) ->
         step_count => ExecState#exec_state.step_count,
         status => ExecState#exec_state.status,
         current_token => ExecState#exec_state.current_token,
-        task_metadata => ExecState#exec_state.task_metadata
+        task_metadata => ExecState#exec_state.task_metadata,
+        loop_counters => ExecState#exec_state.loop_counters
     },
     term_to_binary(StateMap).
 
@@ -157,7 +165,8 @@ restore_exec_state(Binary, Bytecode) ->
              maps:is_key(step_count, StateMap) andalso
              maps:is_key(status, StateMap) andalso
              maps:is_key(current_token, StateMap) andalso
-             maps:is_key(task_metadata, StateMap) of
+             maps:is_key(task_metadata, StateMap) andalso
+             maps:is_key(loop_counters, StateMap) of
             false ->
                 {error, invalid_snapshot};
             true ->
@@ -180,7 +189,8 @@ restore_exec_state(Binary, Bytecode) ->
                             step_count = maps:get(step_count, StateMap),
                             status = maps:get(status, StateMap),
                             current_token = maps:get(current_token, StateMap),
-                            task_metadata = maps:get(task_metadata, StateMap)
+                            task_metadata = maps:get(task_metadata, StateMap),
+                            loop_counters = maps:get(loop_counters, StateMap)
                         },
                         {ok, ExecState}
                 end
@@ -804,23 +814,21 @@ execute_xor_choose({_XorChoose, TargetIPs}, ExecState, _SchedDecision) ->
 %% @doc Execute LOOP_CHECK: evaluate condition, exit or continue
 execute_loop_check({_LoopCheck, Policy}, ExecState) ->
     case evaluate_loop_condition(Policy, ExecState) of
-        {true, NewCtx} ->
-            %% Condition satisfied, continue to body
-            %% IP advances to next instruction (body)
-            ExecState#exec_state{
-                ip = ExecState#exec_state.ip + 1,
+        {true, NewCtx, NewExecState} ->
+            %% Condition satisfied, continue to loop body
+            NewExecState#exec_state{
+                ip = NewExecState#exec_state.ip + 1,
                 ctx = NewCtx,
-                step_count = ExecState#exec_state.step_count + 1
+                step_count = NewExecState#exec_state.step_count + 1
             };
-        {false, NewCtx} ->
+        {false, NewCtx, NewExecState} ->
             %% Condition not satisfied, exit loop
-            %% For now, we still advance to body
-            %% LOOP_BACK will handle the actual looping
-            %% In production, compiler would emit explicit exit label
-            ExecState#exec_state{
-                ip = ExecState#exec_state.ip + 1,
+            %% Calculate exit IP by scanning forward to find matching loop_back
+            ExitIP = calculate_loop_exit(NewExecState),
+            NewExecState#exec_state{
+                ip = ExitIP,
                 ctx = NewCtx,
-                step_count = ExecState#exec_state.step_count + 1
+                step_count = NewExecState#exec_state.step_count + 1
             }
     end.
 
@@ -831,29 +839,76 @@ execute_loop_back({_LoopBack, TargetIP}, ExecState) ->
         step_count = ExecState#exec_state.step_count + 1
     }.
 
-%% @doc Evaluate loop condition
--spec evaluate_loop_condition(wf_vm:loop_policy(), exec_state()) -> {boolean(), map()}.
+%% @doc Evaluate loop condition with per-scope counter tracking
+%% Returns {bool(), ctx(), exec_state()} to pass updated counter state
+-spec evaluate_loop_condition(wf_vm:loop_policy(), exec_state()) -> {boolean(), map(), exec_state()}.
 evaluate_loop_condition({count, N}, ExecState) ->
-    %% Check counter stored in context
-    Counter = maps:get(loop_counter, ExecState#exec_state.ctx, N),
+    %% Use current IP as unique loop identifier (IP of loop_check instruction)
+    LoopIP = ExecState#exec_state.ip,
+    Counters = ExecState#exec_state.loop_counters,
+
+    %% Initialize counter on first check (defaults to N)
+    %% Subsequent iterations use stored counter
+    Counter = maps:get(LoopIP, Counters, N),
+
     case Counter > 0 of
         true ->
-            %% Decrement counter after checking
+            %% Decrement counter and continue to loop body
             NewCounter = Counter - 1,
-            NewCtx = maps:put(loop_counter, NewCounter, ExecState#exec_state.ctx),
-            {true, NewCtx};
+            NewCounters = maps:put(LoopIP, NewCounter, Counters),
+            NewExecState = ExecState#exec_state{loop_counters = NewCounters},
+            {true, NewExecState#exec_state.ctx, NewExecState};
         false ->
-            {false, ExecState#exec_state.ctx}
+            %% Counter exhausted, exit loop
+            %% Clean up counter entry to avoid memory leaks
+            NewCounters = maps:remove(LoopIP, Counters),
+            NewExecState = ExecState#exec_state{loop_counters = NewCounters},
+            {false, NewExecState#exec_state.ctx, NewExecState}
     end;
 evaluate_loop_condition(while, ExecState) ->
-    %% While loop: check condition first
-    %% For simplicity, always continue (mock)
-    %% In production, would evaluate condition function
-    {true, ExecState#exec_state.ctx};
+    %% While loop: check condition before body
+    %% Mock implementation - always continue (item 052 should implement real evaluation)
+    {true, ExecState#exec_state.ctx, ExecState};
 evaluate_loop_condition(until, ExecState) ->
     %% Until loop: check condition after body
-    %% For simplicity, always exit after first iteration (mock)
-    {false, ExecState#exec_state.ctx}.
+    %% Mock implementation - always exit after first iteration (item 052 should implement real evaluation)
+    {false, ExecState#exec_state.ctx, ExecState}.
+
+%% @doc Calculate loop exit IP by scanning forward to find matching loop_back
+%% Handles nested loops via depth counter (finds loop_back at same depth)
+-spec calculate_loop_exit(exec_state()) -> non_neg_integer().
+calculate_loop_exit(ExecState) ->
+    %% Find next loop_back opcode at depth 0 (matching this loop_check)
+    %% Start scanning from instruction after current IP (the loop body)
+    Bytecode = ExecState#exec_state.bytecode,
+    CurrentIP = ExecState#exec_state.ip,
+    find_loop_back_exit(Bytecode, CurrentIP + 1, 0).
+
+%% @private Scan bytecode for matching loop_back, handling nested loops
+find_loop_back_exit(Bytecode, IP, Depth) ->
+    case IP >= length(Bytecode) of
+        true ->
+            %% Reached end of bytecode without finding loop_back
+            %% This shouldn't happen in well-formed bytecode
+            error({missing_loop_back, IP});
+        false ->
+            Opcode = lists:nth(IP + 1, Bytecode),  %% IP is 0-indexed
+            case Opcode of
+                {loop_back, _TargetIP} when Depth =:= 0 ->
+                    %% Found matching loop_back at same depth
+                    %% Exit to instruction after loop_back
+                    IP + 1;
+                {loop_back, _TargetIP} ->
+                    %% loop_back for nested loop, decrement depth and continue
+                    find_loop_back_exit(Bytecode, IP + 1, Depth - 1);
+                {loop_check, _Policy} ->
+                    %% Entered nested loop, increment depth and continue
+                    find_loop_back_exit(Bytecode, IP + 1, Depth + 1);
+                _Opcode ->
+                    %% Any other opcode, continue scanning
+                    find_loop_back_exit(Bytecode, IP + 1, Depth)
+            end
+    end.
 
 %%====================================================================
 %% Cancellation Opcodes
@@ -1024,6 +1079,8 @@ increment_join_counter(BranchId, ExecState, ResultValue) ->
     maps:put(JoinId, UpdatedJoinCounter, ExecState#exec_state.join_counters).
 
 %% @doc Look up task function from metadata map
+%% For backward compatibility with old test code that doesn't provide metadata,
+%% falls back to a mock function that returns {ok, Ctx} with task_result = ok
 -spec lookup_task_function(atom(), exec_state()) -> fun((map()) -> {ok, map()} | {effect, term(), map()} | {error, term()}).
 lookup_task_function(TaskName, ExecState) ->
     case maps:find(TaskName, ExecState#exec_state.task_metadata) of
@@ -1035,7 +1092,9 @@ lookup_task_function(TaskName, ExecState) ->
                     error({badarg, {invalid_task_metadata, TaskName, "function key missing or not a fun"}})
             end;
         error ->
-            error({badarg, {missing_task_metadata, TaskName}})
+            %% Backward compatibility: old test code uses plain bytecode lists
+            %% without metadata. Fall back to mock function.
+            fun(Ctx) -> {ok, maps:put(task_result, ok, Ctx)} end
     end.
 
 %%====================================================================

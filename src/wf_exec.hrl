@@ -41,5 +41,6 @@
     step_count :: non_neg_integer(),
     status :: running | done | blocked | blocked_effect | cancelled | failed,
     current_token :: term() | undefined,
-    task_metadata :: wf_vm:task_metadata_map()  %% Task metadata for function lookup
+    task_metadata :: wf_vm:task_metadata_map(),  %% Task metadata for function lookup
+    loop_counters :: #{term() => non_neg_integer()}  %% Per-scope loop iteration counters
 }).
