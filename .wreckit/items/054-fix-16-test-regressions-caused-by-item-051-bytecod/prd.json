@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "id": "054-fix-16-test-regressions-caused-by-item-051-bytecod",
+  "branch_name": "wreckit/054-fix-16-test-regressions-caused-by-item-051-bytecod",
+  "user_stories": [
+    {
+      "id": "US-001",
+      "title": "Add backward compatibility clause to wf_exec:new/1 for legacy bytecode lists",
+      "acceptance_criteria": [
+        "wf_exec:new/1 accepts both {Bytecode, Metadata} tuple and plain [opcode()] list",
+        "Second function clause wraps plain list as {List, #{}} with empty metadata",
+        "Type spec updated to wf_vm:wf_bc() | [wf_vm:opcode()]",
+        "All 56 failing test cases now pass after this change",
+        "rebar3 eunit shows 0 failures for wf_test_seq, wf_test_par, wf_test_xor, wf_test_join, wf_test_cancel, wf_test_mi, wf_test_term"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "This is the highest priority fix that unblocks all existing tests immediately. Add second function clause at line 52-78 in wf_exec.erl that matches plain lists and delegates to tuple clause with empty metadata."
+    },
+    {
+      "id": "US-002",
+      "title": "Add loop_counters field to exec_state record for per-scope counter tracking",
+      "acceptance_criteria": [
+        "exec_state record has loop_counters :: #{term() => non_neg_integer()} field",
+        "wf_exec:new/1 initializes loop_counters to #{} in both function clauses",
+        "snapshot_exec_state/1 includes loop_counters in snapshot map",
+        "restore_exec_state/2 validates and restores loop_counters field"
+      ],
+      "priority": 1,
+      "status": "done",
+      "notes": "Add field to wf_exec.hrl record definition. Initialize in new/1. Update snapshot/restore functions to persist loop counters across state snapshots."
+    },
+    {
+      "id": "US-003",
+      "title": "Rewrite evaluate_loop_condition/2 to use per-scope counters and return exec_state triple",
+      "acceptance_criteria": [
+        "evaluate_loop_condition returns {bool(), ctx(), exec_state()} triple",
+        "Uses exec_state#loop_counters map keyed by current IP (loop head IP)",
+        "Counter initialized to N on first check via maps:get(LoopIP, Counters, N)",
+        "Counter decrements from N down to 0, loop continues while Counter > 0",
+        "Counter entry removed from loop_counters map when loop exits (Counter = 0)",
+        "Mock implementations for while/until updated to return triple format"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Rewrite function at line 836-856 in wf_exec.erl. Change from context-based storage (breaks nested loops) to exec_state#loop_counters map. Return triple to pass updated exec_state with counter changes back to caller."
+    },
+    {
+      "id": "US-004",
+      "title": "Update execute_loop_check/2 to handle triple return and calculate loop exit IP",
+      "acceptance_criteria": [
+        "execute_loop_check destructures triple {bool(), ctx(), exec_state()} from evaluate_loop_condition",
+        "When condition is true, advances IP to body (current IP + 1)",
+        "When condition is false, calls calculate_loop_exit/1 to find exit IP",
+        "Jump to exit IP instead of advancing to loop body",
+        "Step count incremented in both paths"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Modify function at line 805-825 in wf_exec.erl. Handle new triple return type from evaluate_loop_condition. When false, don't advance to body - instead calculate and jump to loop exit."
+    },
+    {
+      "id": "US-005",
+      "title": "Implement calculate_loop_exit/1 to find matching loop_back opcode",
+      "acceptance_criteria": [
+        "Scans forward from current IP to find {loop_back, _TargetIP} at same depth",
+        "Uses depth counter to handle nested loops (increment on loop_check, decrement on loop_back)",
+        "Returns IP after matching loop_back opcode (the loop exit point)",
+        "Errors with descriptive message if loop_back not found (malformed bytecode)",
+        "Handles edge case: nested loops don't interfere with exit calculation"
+      ],
+      "priority": 2,
+      "status": "done",
+      "notes": "Add new helper function after evaluate_loop_condition in wf_exec.erl. Scans bytecode forward using depth counter to find matching loop_back. Returns IP + 1 to skip to instruction after loop."
+    },
+    {
+      "id": "US-006",
+      "title": "Add loop_count_test/0 acceptance test to verify end-to-end loop execution",
+      "acceptance_criteria": [
+        "Test compiles wf_term:loop({count, 3}, wf_term:task(counter, #{function => Fun}))",
+        "Task function increments 'n' key in context each time it runs",
+        "Executes workflow with wf_exec:run(ExecState, 100, deterministic)",
+        "Asserts result is {done, _} not {yield, _} (workflow completes)",
+        "Asserts final context has n => 3 (task ran exactly 3 times)",
+        "Asserts loop_counter key not in user context (counters in exec_state, not context)",
+        "Tests both bytecode formats: tuple with metadata and plain list (backward compatibility)"
+      ],
+      "priority": 3,
+      "status": "done",
+      "notes": "Add to test/wf_acceptance_tests.erl after line 87. Test verifies: (1) loop terminates after N iterations, (2) counters stored in exec_state not context, (3) backward compatibility works with both formats."
+    }
+  ]
+}
