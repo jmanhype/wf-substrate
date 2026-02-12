@@ -47,9 +47,9 @@
 %% API Functions
 %%====================================================================
 
-%% @doc Create new executor from bytecode
+%% @doc Create new executor from bytecode with metadata
 -spec new(wf_vm:wf_bc()) -> exec_state().
-new(Bytecode) ->
+new({Bytecode, Metadata}) ->
     CaseId = make_ref(),  %% Generate case_id for effect IDs
     InitialTokenId = make_ref(),
     RootScopeId = root,
@@ -73,7 +73,8 @@ new(Bytecode) ->
         scope_stack = [RootScopeId],
         step_count = 0,
         status = running,
-        current_token = InitialTokenId
+        current_token = InitialTokenId,
+        task_metadata = Metadata  %% Store task metadata for lookup
     }.
 
 %% @doc Get current instruction pointer
@@ -116,7 +117,8 @@ snapshot_exec_state(ExecState) ->
         scope_stack => ExecState#exec_state.scope_stack,
         step_count => ExecState#exec_state.step_count,
         status => ExecState#exec_state.status,
-        current_token => ExecState#exec_state.current_token
+        current_token => ExecState#exec_state.current_token,
+        task_metadata => ExecState#exec_state.task_metadata
     },
     term_to_binary(StateMap).
 
@@ -154,7 +156,8 @@ restore_exec_state(Binary, Bytecode) ->
              maps:is_key(scope_stack, StateMap) andalso
              maps:is_key(step_count, StateMap) andalso
              maps:is_key(status, StateMap) andalso
-             maps:is_key(current_token, StateMap) of
+             maps:is_key(current_token, StateMap) andalso
+             maps:is_key(task_metadata, StateMap) of
             false ->
                 {error, invalid_snapshot};
             true ->
@@ -176,7 +179,8 @@ restore_exec_state(Binary, Bytecode) ->
                             scope_stack = maps:get(scope_stack, StateMap),
                             step_count = maps:get(step_count, StateMap),
                             status = maps:get(status, StateMap),
-                            current_token = maps:get(current_token, StateMap)
+                            current_token = maps:get(current_token, StateMap),
+                            task_metadata = maps:get(task_metadata, StateMap)
                         },
                         {ok, ExecState}
                 end
@@ -1019,12 +1023,20 @@ increment_join_counter(BranchId, ExecState, ResultValue) ->
     },
     maps:put(JoinId, UpdatedJoinCounter, ExecState#exec_state.join_counters).
 
-%% @doc Look up task function (mock for now)
+%% @doc Look up task function from metadata map
 -spec lookup_task_function(atom(), exec_state()) -> fun((map()) -> {ok, map()} | {effect, term(), map()} | {error, term()}).
-lookup_task_function(_TaskName, _ExecState) ->
-    %% Mock: task always succeeds with ok result
-    %% In production, would look up from bytecode metadata
-    fun(Ctx) -> {ok, maps:put(task_result, ok, Ctx)} end.
+lookup_task_function(TaskName, ExecState) ->
+    case maps:find(TaskName, ExecState#exec_state.task_metadata) of
+        {ok, Metadata} ->
+            case maps:find(function, Metadata) of
+                {ok, TaskFun} when is_function(TaskFun) ->
+                    TaskFun;
+                _ ->
+                    error({badarg, {invalid_task_metadata, TaskName, "function key missing or not a fun"}})
+            end;
+        error ->
+            error({badarg, {missing_task_metadata, TaskName}})
+    end.
 
 %%====================================================================
 %% Effect Resume
