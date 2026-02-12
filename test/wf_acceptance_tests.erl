@@ -137,3 +137,59 @@ loop_count_test_() ->
          FinalCtx2 = wf_exec:get_ctx(ExecState3),
          ?assertEqual(3, maps:get(n, FinalCtx2, 0))
      end}.
+
+%%--------------------------------------------------------------------
+%% @doc Acceptance test for parallel fork/join execution
+%%
+%% This test verifies:
+%% 1. PAR_FORK spawns multiple tokens for parallel branches
+%% 2. Scheduler selects real tokens (not mock_token)
+%% 3. Each branch executes its task function to completion
+%% 4. JOIN_WAIT blocks until all branches complete
+%% 5. Workflow returns {done, _} (not {yield, _})
+%% 6. Context contains updates from all task functions
+%%
+%% NO MOCKS: Uses real task functions from metadata
+%%--------------------------------------------------------------------
+parallel_fork_join_test_() ->
+    {"Parallel fork/join executes both branches and merges context",
+     fun() ->
+         %% Build workflow: par([task(x), task(y)])
+         %% Each task sets a unique key in the context
+         Term = wf_term:par([
+             wf_term:task(x, #{
+                 function => fun(Ctx) ->
+                     {ok, Ctx#{x_ran => true}}
+                 end
+             }),
+             wf_term:task(y, #{
+                 function => fun(Ctx) ->
+                     {ok, Ctx#{y_ran => true}}
+                 end
+             })
+         ]),
+
+         %% Compile to bytecode (returns {ok, {Bytecode, Metadata}})
+         {ok, {Bytecode, Metadata}} = wf_compile:compile(Term),
+
+         %% Verify metadata was collected for both tasks
+         ?assertEqual(2, map_size(Metadata)),
+         ?assert(maps:is_key(x, Metadata)),
+         ?assert(maps:is_key(y, Metadata)),
+
+         %% Execute workflow with deterministic scheduler
+         ExecState0 = wf_exec:new({Bytecode, Metadata}),
+         Result = wf_exec:run(ExecState0, 100, deterministic),
+
+         %% Verify result is {done, _} not {yield, _}
+         ?assertMatch({done, _}, Result),
+
+         %% Extract final state for context verification
+         {done, ExecState1} = Result,
+
+         %% Verify both tasks ran (context has both keys)
+         FinalCtx = wf_exec:get_ctx(ExecState1),
+         ?assertEqual(true, maps:get(x_ran, FinalCtx)),
+         ?assertEqual(true, maps:get(y_ran, FinalCtx)),
+         ?assertEqual(2, map_size(FinalCtx))
+     end}.
