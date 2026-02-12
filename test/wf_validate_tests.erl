@@ -146,29 +146,44 @@ explore_simple_workflow_test() ->
 %%====================================================================
 
 check_dead_transitions_none_test_() ->
-    {skip, "collect_states_simple has infinite loop bug - needs visited states tracking"}.
+    Bytecode = mock_bytecode_simple(),
+    States = collect_states_simple(Bytecode, 10),
+    [?_assertEqual([], wf_validate:check_dead_transitions(States, Bytecode))].
 
 check_dead_transitions_unreachable_test_() ->
-    {skip, "collect_states_simple has infinite loop bug - needs visited states tracking"}.
+    Bytecode = mock_bytecode_unreachable(),
+    States = collect_states_simple(Bytecode, 10),
+    Issues = wf_validate:check_dead_transitions(States, Bytecode),
+    [?_assert(length(Issues) > 0)].
 
 check_proper_completion_valid_test_() ->
-    {skip, "collect_states_simple has infinite loop bug - needs visited states tracking"}.
+    Bytecode = mock_bytecode_simple(),
+    States = collect_states_simple(Bytecode, 10),
+    Issues = wf_validate:check_proper_completion(States),
+    [?_assertEqual([], Issues)].
 
 check_deadlock_par_fork_test_() ->
-    {skip, "collect_states_simple has infinite loop bug - needs visited states tracking"}.
+    Bytecode = mock_bytecode_deadlock(),
+    States = collect_states_simple(Bytecode, 10),
+    Issues = wf_validate:check_proper_completion(States),
+    [?_assert(length(Issues) > 0)].
 
 %%====================================================================
 %% Tests: Phase 4 - Public API
 %%====================================================================
 
 validate_simple_workflow_test_() ->
-    {skip, "wf_validate:validate has infinite loop bug in collect_states - needs visited states tracking"}.
+    Bytecode = mock_bytecode_simple(),
+    [?_assertMatch({ok, _}, wf_validate:validate(Bytecode))].
 
 validate_deadlock_workflow_test_() ->
-    {skip, "wf_validate:validate has infinite loop bug in collect_states - needs visited states tracking"}.
+    Bytecode = mock_bytecode_deadlock(),
+    [?_assertMatch({error, _}, wf_validate:validate(Bytecode))].
 
 validate_with_custom_options_test_() ->
-    {skip, "wf_validate:validate has infinite loop bug in collect_states - needs visited states tracking"}.
+    Bytecode = mock_bytecode_simple(),
+    Options = #{depth => 5, token_bound => 2},
+    [?_assertMatch({ok, _}, wf_validate:validate(Bytecode, Options))].
 
 %%====================================================================
 %% Helper Functions
@@ -177,18 +192,21 @@ validate_with_custom_options_test_() ->
 %% Simple state collector for testing
 collect_states_simple(Bytecode, MaxSteps) ->
     InitialState = wf_validate:new(Bytecode),
-    collect_states_simple([InitialState], MaxSteps, []).
+    collect_states_simple([InitialState], MaxSteps, [], sets:new([{version, 2}])).
 
-collect_states_simple([], _MaxSteps, Acc) ->
+collect_states_simple([], _MaxSteps, Acc, _Visited) ->
     lists:usort(Acc);
-collect_states_simple([State | Rest], MaxSteps, Acc) when State#validation_state.step_count >= MaxSteps ->
-    collect_states_simple(Rest, MaxSteps, [State | Acc]);
-collect_states_simple([State | Rest], MaxSteps, Acc) ->
-    Enabled = wf_validate:enabled_transitions(State),
-    case Enabled of
-        [] ->
-            collect_states_simple(Rest, MaxSteps, [State | Acc]);
-        _ ->
-            Successors = [wf_validate:fire_transition(State, Action) || Action <- Enabled],
-            collect_states_simple(Rest ++ Successors, MaxSteps, [State | Acc])
+collect_states_simple([State | Rest], MaxSteps, Acc, Visited) ->
+    Hash = wf_validate:state_hash(State),
+    case sets:is_element(Hash, Visited) of
+        true -> collect_states_simple(Rest, MaxSteps, Acc, Visited);
+        false ->
+            NewVisited = sets:add_element(Hash, Visited),
+            if State#validation_state.step_count >= MaxSteps ->
+                collect_states_simple(Rest, MaxSteps, [State | Acc], NewVisited);
+            true ->
+                Enabled = wf_validate:enabled_transitions(State),
+                Successors = [wf_validate:fire_transition(State, Action) || Action <- Enabled],
+                collect_states_simple(Rest ++ Successors, MaxSteps, [State | Acc], NewVisited)
+            end
     end.

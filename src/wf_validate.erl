@@ -129,7 +129,7 @@ validate(Bytecode, Options) ->
     InitialState = new(Bytecode),
     MaxDepth = maps:get(depth, Options, 100),
     MaxTokens = maps:get(token_bound, Options, 10),
-    States = collect_states([InitialState], MaxDepth, MaxTokens, []),
+    States = collect_states([InitialState], MaxDepth, MaxTokens, [], sets:new([{version, 2}])),
 
     %% Run all checks
     AllIssues = check_soundness({States, Bytecode, Options}),
@@ -153,17 +153,24 @@ validate(Bytecode, Options) ->
     end.
 
 %% @private Collect all explored states
-collect_states([], _MaxDepth, _MaxTokens, Acc) ->
+collect_states([], _MaxDepth, _MaxTokens, Acc, _Visited) ->
     lists:reverse(Acc);
-collect_states([State | Rest], MaxDepth, MaxTokens, Acc) ->
-    case State#validation_state.step_count >= MaxDepth orelse
-         map_size(State#validation_state.tokens) > MaxTokens of
+collect_states([State | Rest], MaxDepth, MaxTokens, Acc, Visited) ->
+    StateHash = state_hash(State),
+    case sets:is_element(StateHash, Visited) of
         true ->
-            collect_states(Rest, MaxDepth, MaxTokens, Acc);
+            collect_states(Rest, MaxDepth, MaxTokens, Acc, Visited);
         false ->
-            Enabled = enabled_transitions(State),
-            Successors = [fire_transition(State, Action) || Action <- Enabled],
-            collect_states(Rest ++ Successors, MaxDepth, MaxTokens, [State | Acc])
+            NewVisited = sets:add_element(StateHash, Visited),
+            case State#validation_state.step_count >= MaxDepth orelse
+                 map_size(State#validation_state.tokens) > MaxTokens of
+                true ->
+                    collect_states(Rest, MaxDepth, MaxTokens, Acc, NewVisited);
+                false ->
+                    Enabled = enabled_transitions(State),
+                    Successors = [fire_transition(State, Action) || Action <- Enabled],
+                    collect_states(Rest ++ Successors, MaxDepth, MaxTokens, [State | Acc], NewVisited)
+            end
     end.
 
 %% @doc Format issue for display
